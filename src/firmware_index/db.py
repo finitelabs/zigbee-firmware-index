@@ -3,6 +3,7 @@
 import datetime
 import json
 import sqlite3
+import tempfile
 from pathlib import Path
 
 from firmware_index import sources
@@ -70,6 +71,13 @@ CREATE TABLE lock (
   holder TEXT NOT NULL,
   since TEXT NOT NULL
 );
+CREATE TABLE audit (
+  id INTEGER PRIMARY KEY,
+  at TEXT NOT NULL,
+  who TEXT NOT NULL,
+  action TEXT NOT NULL,
+  detail TEXT NOT NULL
+);
 """
 
 LOCK_EXPIRES = datetime.timedelta(hours=6)
@@ -113,6 +121,26 @@ def seed(db: sqlite3.Connection) -> None:
                 int(s.get("enabled", True)),
             ),
         )
+
+
+def audit(db: sqlite3.Connection, who: str, action: str, detail: dict) -> None:
+    db.execute(
+        "INSERT INTO audit (at, who, action, detail) VALUES (?, ?, ?, ?)",
+        (iso(now()), who, action, json.dumps(detail, sort_keys=True)),
+    )
+
+
+def dump(path: Path, out) -> None:
+    """A consistent copy of the database, written to out, while serve and publish keep running."""
+    with tempfile.NamedTemporaryFile(dir=path.parent, suffix=".dump") as tmp:
+        src = sqlite3.connect(path)
+        dst = sqlite3.connect(tmp.name)
+        try:
+            src.backup(dst)
+        finally:
+            dst.close()
+            src.close()
+        out.write(Path(tmp.name).read_bytes())
 
 
 def take_lock(db: sqlite3.Connection, holder: str, at: datetime.datetime) -> bool:

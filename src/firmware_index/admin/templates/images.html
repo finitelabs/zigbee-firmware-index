@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Images</h1>
+<form method="get" action="/images"><input type="text" name="q" value="{{ q }}" placeholder="manufacturer, image type, model, file, source"> <button>Search</button></form>
+<p class="muted">{{ total }} published entries{% if q %} match{% endif %}{% if total > limit %}; the first {{ limit }} shown{% endif %}.</p>
+<div class="wide">
+<table>
+<tr><th>Manufacturer</th><th>Image type</th><th>Version</th><th>Model</th><th>File</th><th>Size</th><th>Sources</th><th>Rules</th><th></th></tr>
+{% for e in entries %}
+<tr>
+<td class="mono">{{ e.manufacturerCode | hex4 }}</td>
+<td class="mono">{{ e.imageType | hex4 }}</td>
+<td class="mono">{{ e.fileVersion | hex8 }}</td>
+<td>{{ e.modelId or "" }}{% if e.manufacturerName %} <span class="muted">{{ e.manufacturerName | join(", ") }}</span>{% endif %}</td>
+<td><a href="{{ e.url }}">{{ e.fileName }}</a></td>
+<td>{{ e.fileSize }}</td>
+<td>{{ e.sources | join(", ") }}</td>
+<td>{{ (e.rules or []) | join(", ") }}</td>
+<td><a href="/images/{{ e.sha512 }}">Hold, drop or edit</a></td>
+</tr>
+{% endfor %}
+</table>
+</div>
+{% for title, items in [("Held", report.held), ("Dropped", report.dropped), ("Waiting", report.waiting)] %}
+{% if items %}<h2>{{ title }} in the last run ({{ items | length }})</h2><ul class="mono">{% for i in items[:200] %}<li>{{ i }}</li>{% endfor %}</ul>{% endif %}
+{% endfor %}
+{% if report.failures %}<h2>Failed checks in the last run ({{ report.failures | length }})</h2><ul class="mono">{% for f in report.failures %}<li>{{ f.entry }}: {{ f.reason }}</li>{% endfor %}</ul>{% endif %}
+<p class="muted">A held or dropped image is released by switching its rule off on the Rules page.</p>
+{% endblock %}

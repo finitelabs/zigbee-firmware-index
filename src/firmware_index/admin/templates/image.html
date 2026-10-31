@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Image <code>{{ sha[:16] }}</code></h1>
+{% for e in entries %}<pre class="wide">{{ e | tojson(indent=2) }}</pre>{% endfor %}
+<p>Each action adds a rule matching this file's sha512. It applies from the next run.</p>
+<form method="post" action="/images/{{ sha }}/rule">
+<input type="hidden" name="action" value="hold">
+<label>Note <input type="text" name="note" size="50"></label>
+<button>Hold</button>
+</form>
+<form method="post" action="/images/{{ sha }}/rule">
+<input type="hidden" name="action" value="drop">
+<label>Note <input type="text" name="note" size="50"></label>
+<button>Drop</button>
+</form>
+<fieldset>
+<legend>Set fields</legend>
+<form method="post" action="/images/{{ sha }}/rule">
+<input type="hidden" name="action" value="set">
+{% for name in settable %}<p><label>{{ name }} <input type="text" name="{{ name }}"></label></p>{% endfor %}
+<p class="muted">Numbers may be decimal or 0x hex. manufacturerName takes a comma-separated list.</p>
+<label>Note <input type="text" name="note" size="50"></label>
+<button>Add set rule</button>
+</form>
+</fieldset>
+{% endblock %}

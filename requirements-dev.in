@@ -2,4 +2,5 @@
 -c requirements.txt
 
 black
+httpx
 pytest

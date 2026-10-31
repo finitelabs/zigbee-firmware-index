@@ -3,4 +3,9 @@
 aiohttp
 boto3
 cryptography
+jinja2
+python-multipart
+pyyaml
+starlette
+uvicorn
 zigpy

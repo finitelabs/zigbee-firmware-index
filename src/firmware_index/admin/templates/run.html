@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Run {{ run.id }}</h1>
+<p>Started {{ run.started }}, finished {{ run.finished or "not yet" }}: <strong>{{ run.status or "running" }}</strong>{% if run.anyway %}, published anyway{% endif %}.
+{% if report.snapshot %}Snapshot <code>{{ report.snapshot }}</code>{% if report.changed %} (new){% else %} (unchanged){% endif %}.{% endif %}</p>
+{% if report.alerts %}<h2>Alerts</h2><ul>{% for a in report.alerts %}<li>{{ a }}</li>{% endfor %}</ul>{% endif %}
+{% if report.counts %}<h2>Counts</h2><p>{% for k, v in report.counts.items() %}{{ k }} {{ v }}{% if not loop.last %}, {% endif %}{% endfor %}</p>{% endif %}
+<h2>Sources</h2>
+<table><tr><th>Source</th><th>Status</th><th>Entries</th><th>Error</th></tr>
+{% for s in report.sources or [] %}<tr><td>{{ s.name }}</td><td>{{ s.status }}</td><td>{{ s.count }}</td><td>{{ s.error or "" }}</td></tr>{% endfor %}
+</table>
+{% if report.failures %}<h2>Failed checks</h2><table><tr><th>Entry</th><th>Reason</th></tr>
+{% for f in report.failures %}<tr><td class="mono">{{ f.entry }}</td><td>{{ f.reason }}</td></tr>{% endfor %}</table>{% endif %}
+{% if report.clashes %}<h2>Clashes</h2><table><tr><th>Entry</th><th>Kept</th><th>Over</th></tr>
+{% for c in report.clashes %}<tr><td class="mono">{{ c.entry }}</td><td class="mono">{{ c.kept }}</td><td class="mono">{{ c.over | join(", ") }}</td></tr>{% endfor %}</table>{% endif %}
+{% for title, items in [("Held", report.held), ("Dropped", report.dropped), ("Waiting", report.waiting)] %}
+{% if items %}<h2>{{ title }} ({{ items | length }})</h2><ul class="mono">{% for i in items[:200] %}<li>{{ i }}</li>{% endfor %}</ul>{% endif %}
+{% endfor %}
+{% endblock %}

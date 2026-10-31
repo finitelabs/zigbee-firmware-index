@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Audit</h1>
+<div class="wide">
+<table>
+<tr><th>When</th><th>Who</th><th>Action</th><th>Detail</th></tr>
+{% for r in rows %}
+<tr><td>{{ r.at }}</td><td>{{ r.who }}</td><td>{{ r.action }}</td><td class="mono">{{ r.detail }}</td></tr>
+{% else %}
+<tr><td colspan="4" class="muted">Nothing yet.</td></tr>
+{% endfor %}
+</table>
+</div>
+{% endblock %}

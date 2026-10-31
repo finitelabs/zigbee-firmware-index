@@ -6,10 +6,33 @@
 #
 --index-url https://pypi.python.org/simple
 
+anyio==4.15.1
+    # via
+    #   -c requirements.txt
+    #   httpx
 black==26.10.1
     # via -r requirements-dev.in
+certifi==2026.10.23
+    # via
+    #   httpcore
+    #   httpx
 click==8.5.0
-    # via black
+    # via
+    #   -c requirements.txt
+    #   black
+h11==0.16.0
+    # via
+    #   -c requirements.txt
+    #   httpcore
+httpcore==1.0.9
+    # via httpx
+httpx==0.28.1
+    # via -r requirements-dev.in
+idna==3.20
+    # via
+    #   -c requirements.txt
+    #   anyio
+    #   httpx
 iniconfig==2.3.1
     # via pytest
 mypy-extensions==1.1.0
@@ -30,3 +53,7 @@ pytest==9.2.0
     # via -r requirements-dev.in
 pytokens==0.4.1
     # via black
+typing-extensions==4.16.0
+    # via
+    #   -c requirements.txt
+    #   anyio

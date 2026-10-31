@@ -62,5 +62,5 @@ def test_a_rule_names_only_known_actions_and_fields():
         rules.Rule(id="r", action="delete", match={})
     with pytest.raises(ValueError, match="cannot set url"):
         rules.Rule(id="r", action=rules.SET, match={}, set={"url": "x"})
-    with pytest.raises(ValueError, match="unknown match key"):
-        rules.Rule(id="r", action=rules.HOLD, match={"colour": 1}).matches(cand(), None, None)
+    with pytest.raises(ValueError, match="unknown match key colour"):
+        rules.Rule(id="r", action=rules.HOLD, match={"colour": 1})

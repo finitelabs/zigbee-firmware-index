@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Sources</h1>
+<p class="muted">Lower priority wins a clash. A new entry waits its source's delay in days. Changes apply from the next run.</p>
+{% for s in sources %}
+<fieldset>
+<legend><strong>{{ s.name }}</strong> <span class="muted">{{ s.type }}</span></legend>
+<p class="muted">Last good read {{ s.last_ok or "never" }}{% if s.last_error %}; failing: {{ s.last_error }}{% endif %}; {{ s.candidates }} entries kept.</p>
+<form method="post" action="/sources/{{ s.name }}">
+<input type="hidden" name="type" value="{{ s.type }}">
+<label>Priority <input type="number" name="priority" value="{{ s.priority }}"></label>
+<label>Delay <input type="number" name="delay_days" min="0" value="{{ s.delay_days }}"></label>
+<label><input type="checkbox" name="enabled" value="1" {% if s.enabled %}checked{% endif %}> On</label>
+<textarea name="config">{{ s.config }}</textarea>
+<button>Save</button>
+</form>
+</fieldset>
+{% endfor %}
+<h2>Add a source</h2>
+<form method="post" action="/sources">
+<label>Name <input type="text" name="name" required></label>
+<label>Type <select name="type">{% for t in types %}<option>{{ t }}</option>{% endfor %}</select></label>
+<label>Priority <input type="number" name="priority" value="10"></label>
+<label>Delay <input type="number" name="delay_days" min="0" value="7"></label>
+<label><input type="checkbox" name="enabled" value="1" checked> On</label>
+<textarea name="config" placeholder='{"url": "https://..."} or {"provider": "sonoff"}'></textarea>
+<button>Add</button>
+</form>
+{% endblock %}

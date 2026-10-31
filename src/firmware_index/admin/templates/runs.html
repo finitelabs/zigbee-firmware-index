@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Runs</h1>
+<p>
+{% if published %}Published snapshot <code>{{ published.snapshot }}</code>, from the run at {{ published.at }}.{% else %}Nothing published yet.{% endif %}
+</p>
+<form class="inline" method="post" action="/publish"><input type="hidden" name="anyway" value="0"><button>Publish now</button></form>
+<form class="inline" method="post" action="/publish"><input type="hidden" name="anyway" value="1"><button>Publish anyway</button></form>
+<span class="muted">Publish anyway lets a run through the brake.</span>
+<div class="wide">
+<table>
+<tr><th>Run</th><th>Started</th><th>Status</th><th>Entries</th><th>Added</th><th>Removed</th><th>Failed</th><th>Held</th><th>Waiting</th><th>Alerts</th></tr>
+{% for r in runs %}
+<tr>
+<td><a href="/runs/{{ r.id }}">{{ r.id }}</a></td>
+<td>{{ r.started }}</td>
+<td>{{ r.status or "running" }}{% if r.anyway %} (anyway){% endif %}</td>
+<td>{{ r.report.counts.entries if r.report.counts }}</td>
+<td>{{ r.report.counts.added if r.report.counts }}</td>
+<td>{{ r.report.counts.removed if r.report.counts }}</td>
+<td>{{ r.report.counts.failed if r.report.counts }}</td>
+<td>{{ r.report.counts.held if r.report.counts }}</td>
+<td>{{ r.report.counts.waiting if r.report.counts }}</td>
+<td>{{ (r.report.alerts or []) | join("; ") }}</td>
+</tr>
+{% else %}
+<tr><td colspan="10" class="muted">No runs yet.</td></tr>
+{% endfor %}
+</table>
+</div>
+{% endblock %}
