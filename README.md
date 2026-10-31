@@ -17,13 +17,13 @@ The image's entry point is `python -m firmware_index`:
 | `publish`                | One run. Exits 0 on success, 2 when the brake holds the index, 1 otherwise |
 | `publish --anyway`       | One run that publishes even when the brake would hold the index       |
 | `publish --local DIR`    | One run into the folder DIR/site, with its own database and key in DIR/data |
-| `serve --local DIR`      | The admin page on 127.0.0.1 with no sign-in; Publish now runs into DIR |
-| `serve`                  | The admin page (the image's default command)                          |
+| `serve`                  | The admin page, which also publishes on its daily schedule and on Publish now (the image's default command) |
+| `serve --local DIR`      | The same on 127.0.0.1 with no sign-in, publishing into DIR             |
 | `dump`                   | Writes a consistent copy of the database to stdout, for backups       |
 | `keygen PATH`            | Writes a new Ed25519 signing key to PATH and prints its public key    |
 | `check URL`              | Checks the public site as a reader sees it; exits 1 on any problem    |
 
-`publish` reads:
+`serve` and `publish` read:
 
 | Variable                | What                                                       |
 | ----------------------- | ---------------------------------------------------------- |
@@ -36,13 +36,15 @@ The image's entry point is `python -m firmware_index`:
 | `DISCORD_WEBHOOK_URL`   | Where a failure, a brake or a source's failure is posted (optional) |
 | `PUBLIC_URL`            | The site's address (default `https://ota.finitelabs.com`)  |
 
-`serve` reads `DATA_DIR` and:
+`serve` also reads:
 
 | Variable          | What                                                                 |
 | ----------------- | -------------------------------------------------------------------- |
 | `ADMIN_EMAILS`    | Comma-separated emails allowed in                                    |
 | `HOST`, `PORT`    | Where it listens (default `0.0.0.0:8080`)                            |
-| `PUBLISH_CRONJOB` | The CronJob that Publish now makes a Job from (default `publish`)     |
+
+So the whole service is one container running `serve`, with the data volume
+mounted, behind a reverse proxy that signs users in.
 
 ## The admin page
 
@@ -51,9 +53,9 @@ header from anything a client sends; the page lets in only the emails in
 `ADMIN_EMAILS`. A form is accepted only from the page's own origin. `/healthz`
 needs no sign-in.
 
-- **Runs**: each run's report; Publish now and Publish anyway start a Job from
-  the CronJob through the pod's service account, which needs `get` on cronjobs
-  and `create` on jobs.
+- **Runs**: each run's report, Publish now and Publish anyway, and the schedule:
+  one run a day at a set UTC time, on or off. A run missed while the app was
+  down starts when it is back that day. One run at a time.
 - **Sources**: priority, delay, on or off, and each source's config.
 - **Images**: search the published index; hold, drop or correct one file, each
   by adding a rule.

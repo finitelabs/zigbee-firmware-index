@@ -293,3 +293,33 @@ def test_the_discord_message_names_the_status_alerts_and_counts(world):
     assert "entries 0" in text
     report.alerts = []
     assert notify.message(report) is None
+
+
+def test_a_run_stopped_part_way_is_recorded_as_failed(world, monkeypatch):
+    import asyncio
+
+    world.source("community", 3, A)
+    world.fetcher.serve(A, files(world, 1))
+
+    async def slow(*args):
+        await asyncio.sleep(30)
+
+    monkeypatch.setattr(publish, "build", slow)
+    settings = publish.Settings(
+        public_url="https://ota.example.test", key=world.key, store=world.store
+    )
+
+    async def go():
+        task = asyncio.create_task(publish.run(world.db, settings, world.fetcher, world.uploads))
+        await asyncio.sleep(0.05)
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
+    asyncio.run(go())
+    row = world.db.execute("SELECT status, report FROM runs").fetchone()
+    assert row["status"] == publish.FAILED
+    assert "the run was stopped before it finished" in json.loads(row["report"])["alerts"]
+    assert world.db.execute("SELECT COUNT(*) FROM lock").fetchone()[0] == 0

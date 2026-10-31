@@ -363,6 +363,10 @@ async def run(db: sqlite3.Connection, s: Settings, fetcher: Fetcher, uploads: Pa
     try:
         entries = await build(db, s, fetcher, uploads, at, report)
         await publish(db, s, entries, at, report)
+    except asyncio.CancelledError:
+        report.status = FAILED
+        report.alerts.append("the run was stopped before it finished")
+        raise
     except Exception as e:
         report.status = FAILED
         report.alerts.append(f"run failed: {type(e).__name__}: {e}")

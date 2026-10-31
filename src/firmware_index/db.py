@@ -71,6 +71,10 @@ CREATE TABLE lock (
   holder TEXT NOT NULL,
   since TEXT NOT NULL
 );
+CREATE TABLE settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
 CREATE TABLE audit (
   id INTEGER PRIMARY KEY,
   at TEXT NOT NULL,
@@ -121,6 +125,15 @@ def seed(db: sqlite3.Connection) -> None:
                 int(s.get("enabled", True)),
             ),
         )
+
+
+def get_setting(db: sqlite3.Connection, key: str, default: str | None = None) -> str | None:
+    row = db.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
+    return row["value"] if row else default
+
+
+def set_setting(db: sqlite3.Connection, key: str, value: str) -> None:
+    db.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, value))
 
 
 def audit(db: sqlite3.Connection, who: str, action: str, detail: dict) -> None:

@@ -10,7 +10,8 @@ from pathlib import Path
 import aiohttp
 
 from firmware_index import db as dbm
-from firmware_index import keys, notify, publish
+from firmware_index import keys, publish
+from firmware_index.runner import Runner, publish_once
 from firmware_index.store import DirStore, R2Store
 
 EXIT = {publish.OK: 0, publish.FAILED: 1, publish.BRAKE: 2}
@@ -52,36 +53,13 @@ def local_settings(root: Path, base: str, anyway: bool) -> tuple[Path, publish.S
     return data, settings
 
 
-async def publish_once(data: Path, settings: publish.Settings, webhook: str | None):
-    db = dbm.connect(data / "index.sqlite3")
-    try:
-        async with aiohttp.ClientSession() as session:
-            report = await publish.run(db, settings, publish.HttpFetcher(session), data / "uploads")
-    finally:
-        db.close()
-    await notify.post(webhook, report)
-    return report
-
-
 def run_publish(args: argparse.Namespace) -> int:
     if args.local:
         base = os.environ.get("PUBLIC_URL", f"http://127.0.0.1:{LOCAL_PORT}/site")
         data, settings = local_settings(args.local, base, args.anyway)
         webhook = None
     else:
-        data = data_dir()
-        settings = publish.Settings(
-            public_url=os.environ.get("PUBLIC_URL", "https://ota.finitelabs.com").rstrip("/"),
-            key=keys.load(Path(env("SIGNING_KEY_PATH"))),
-            store=R2Store(
-                env("R2_ENDPOINT"),
-                env("R2_BUCKET"),
-                env("R2_ACCESS_KEY_ID"),
-                env("R2_SECRET_ACCESS_KEY"),
-            ),
-            anyway=args.anyway,
-        )
-        webhook = os.environ.get("DISCORD_WEBHOOK_URL")
+        data, settings, webhook = data_dir(), r2_settings(args.anyway), discord()
 
     report = asyncio.run(publish_once(data, settings, webhook))
     print(json.dumps({"status": report.status, "counts": report.counts, "alerts": report.alerts}))
@@ -135,6 +113,24 @@ def data_dir() -> Path:
     return Path(os.environ.get("DATA_DIR", "/data"))
 
 
+def discord() -> str | None:
+    return os.environ.get("DISCORD_WEBHOOK_URL")
+
+
+def r2_settings(anyway: bool) -> publish.Settings:
+    return publish.Settings(
+        public_url=os.environ.get("PUBLIC_URL", "https://ota.finitelabs.com").rstrip("/"),
+        key=keys.load(Path(env("SIGNING_KEY_PATH"))),
+        store=R2Store(
+            env("R2_ENDPOINT"),
+            env("R2_BUCKET"),
+            env("R2_ACCESS_KEY_ID"),
+            env("R2_SECRET_ACCESS_KEY"),
+        ),
+        anyway=anyway,
+    )
+
+
 def serve(args: argparse.Namespace) -> int:
     import uvicorn
 
@@ -145,23 +141,24 @@ def serve(args: argparse.Namespace) -> int:
         base = f"http://127.0.0.1:{port}/site"
         root = args.local
         (root / "site").mkdir(parents=True, exist_ok=True)
-        running = set()
-
-        async def start(anyway: bool) -> str:
-            data, settings = local_settings(root, base, anyway)
-            task = asyncio.create_task(publish_once(data, settings, None))
-            running.add(task)
-            task.add_done_callback(running.discard)
-            return "a local run"
-
         data, _ = local_settings(root, base, False)
-        app = create_app(data, {LOCAL_USER}, start, local_user=LOCAL_USER, site=root / "site")
+        runs = Runner(data, lambda anyway: local_settings(root, base, anyway)[1], None)
+        app = create_app(
+            data,
+            {LOCAL_USER},
+            runs.start,
+            local_user=LOCAL_USER,
+            site=root / "site",
+            scheduler=runs.loop,
+        )
         print(f"The admin page is at http://127.0.0.1:{port}/ and the site at {base}/")
         uvicorn.run(app, host="127.0.0.1", port=port)
         return 0
 
+    r2_settings(False)  # fail at start, not at the first run, when a setting is missing
+    runs = Runner(data_dir(), r2_settings, discord())
     emails = set(env("ADMIN_EMAILS").split(","))
-    app = create_app(data_dir(), emails)
+    app = create_app(data_dir(), emails, runs.start, scheduler=runs.loop)
     uvicorn.run(
         app,
         host=os.environ.get("HOST", "0.0.0.0"),
