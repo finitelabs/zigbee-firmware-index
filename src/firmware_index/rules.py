@@ -9,6 +9,8 @@ DROP = "drop"
 HOLD = "hold"
 SET = "set"
 
+MATCH_KEYS = {"sha512", "source", "manufacturerCode", "imageType", "fileVersion", "modelId", "url"}
+
 # The fields a set rule may replace, by their names in the published index.
 SETTABLE = {
     "modelId": "model_id",
@@ -37,6 +39,9 @@ class Rule:
         unknown = set(self.set) - set(SETTABLE)
         if unknown:
             raise ValueError(f"rule {self.id}: cannot set {', '.join(sorted(unknown))}")
+        unknown = set(self.match) - MATCH_KEYS
+        if unknown:
+            raise ValueError(f"rule {self.id}: unknown match key {', '.join(sorted(unknown))}")
 
     def matches(self, c: Candidate, sha512: str | None, upstream_sha512: str | None) -> bool:
         for key, want in self.match.items():
@@ -61,11 +66,8 @@ class Rule:
             elif key == "modelId":
                 if c.model_id != want:
                     return False
-            elif key == "url":
-                if not fnmatch.fnmatchcase(c.url, want):
-                    return False
-            else:
-                raise ValueError(f"rule {self.id}: unknown match key {key!r}")
+            elif key == "url" and not fnmatch.fnmatchcase(c.url, want):
+                return False
         return True
 
 

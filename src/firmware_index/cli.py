@@ -45,7 +45,7 @@ def run_publish(args: argparse.Namespace) -> int:
         webhook = None
         base = os.environ.get("PUBLIC_URL", (root / "site").resolve().as_uri())
     else:
-        data = Path(os.environ.get("DATA_DIR", "/data"))
+        data = data_dir()
         key_path = Path(env("SIGNING_KEY_PATH"))
         store = R2Store(
             env("R2_ENDPOINT"),
@@ -95,5 +95,36 @@ def main(argv: list[str] | None = None) -> int:
     )
     p.set_defaults(run=run_publish)
 
+    p = commands.add_parser("serve", help="the admin page")
+    p.set_defaults(run=serve)
+
+    p = commands.add_parser("dump", help="write a consistent copy of the database to stdout")
+    p.set_defaults(run=dump)
+
     args = parser.parse_args(argv)
     return args.run(args)
+
+
+def data_dir() -> Path:
+    return Path(os.environ.get("DATA_DIR", "/data"))
+
+
+def serve(args: argparse.Namespace) -> int:
+    import uvicorn
+
+    from firmware_index.admin import create_app
+
+    emails = set(env("ADMIN_EMAILS").split(","))
+    app = create_app(data_dir(), emails)
+    uvicorn.run(
+        app,
+        host=os.environ.get("HOST", "0.0.0.0"),
+        port=int(os.environ.get("PORT", "8080")),
+        proxy_headers=False,
+    )
+    return 0
+
+
+def dump(args: argparse.Namespace) -> int:
+    dbm.dump(data_dir() / "index.sqlite3", sys.stdout.buffer)
+    return 0

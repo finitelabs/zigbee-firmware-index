@@ -15,4 +15,5 @@ USER 10001
 VOLUME /data
 
 ENTRYPOINT ["python", "-m", "firmware_index"]
-CMD ["--help"]
+EXPOSE 8080
+CMD ["serve"]

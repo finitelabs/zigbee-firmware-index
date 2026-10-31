@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Firmware index{% endblock %}</title>
+<style>
+:root { color-scheme: light dark; --fg: #1d1d1f; --bg: #fff; --muted: #6e6e73; --line: #d2d2d7; --note: #f2f6ff; }
+@media (prefers-color-scheme: dark) { :root { --fg: #f5f5f7; --bg: #111; --muted: #a1a1a6; --line: #3a3a3c; --note: #1c2333; } }
+body { font: 15px/1.45 system-ui, sans-serif; color: var(--fg); background: var(--bg); margin: 0; }
+header { display: flex; flex-wrap: wrap; gap: 1rem; align-items: baseline; padding: 0.75rem 1rem; border-bottom: 1px solid var(--line); }
+header strong { margin-right: 1rem; }
+header .who { margin-left: auto; color: var(--muted); }
+main { padding: 1rem; max-width: 72rem; }
+a { color: inherit; }
+table { border-collapse: collapse; width: 100%; margin: 0.5rem 0 1.5rem; }
+th, td { text-align: left; padding: 0.3rem 0.5rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-weight: 600; }
+code, .mono { font-family: ui-monospace, monospace; font-size: 0.9em; }
+.muted { color: var(--muted); }
+.note { background: var(--note); padding: 0.5rem 0.75rem; border-radius: 6px; }
+form.inline { display: inline; }
+input[type=text], input[type=url], input[type=number], textarea, select { font: inherit; padding: 0.2rem 0.3rem; }
+textarea { width: 100%; min-height: 3rem; font-family: ui-monospace, monospace; }
+fieldset { border: 1px solid var(--line); border-radius: 6px; margin: 1rem 0; }
+.wide { overflow-x: auto; }
+.break { word-break: break-all; min-width: 10rem; }
+pre { white-space: pre-wrap; word-break: break-all; }
+</style>
+</head>
+<body>
+<header>
+<strong>Firmware index</strong>
+<a href="/">Runs</a>
+<a href="/sources">Sources</a>
+<a href="/images">Images</a>
+<a href="/rules">Rules</a>
+<a href="/uploads">Uploads</a>
+<a href="/audit">Audit</a>
+<span class="who">{{ user }}</span>
+</header>
+<main>
+{% if message %}<p class="note">{{ message }}</p>{% endif %}
+{% block content %}{% endblock %}
+</main>
+</body>
+</html>

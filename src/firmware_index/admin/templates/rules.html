@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Rules</h1>
+<p class="muted">A drop beats a hold; set rules apply in order. Changes apply from the next run. <a href="/rules.yaml">Download as YAML</a></p>
+<div class="wide">
+<table>
+<tr><th>Id</th><th>Action</th><th>Match</th><th>Set</th><th>Note</th><th>By</th><th>On</th><th></th></tr>
+{% for r in rules %}
+<tr>
+<td class="mono">{{ r.id }}</td>
+<td>{{ r.action }}</td>
+<td class="mono break">{{ r.match | tojson }}</td>
+<td class="mono break">{{ r.set | tojson if r.set }}</td>
+<td>{{ r.note }}</td>
+<td>{{ r.author }}<br><span class="muted">{{ r.created }}</span></td>
+<td>{{ "on" if r.enabled else "off" }}</td>
+<td>
+<form class="inline" method="post" action="/rules/{{ r.id }}/toggle"><button>{{ "Switch off" if r.enabled else "Switch on" }}</button></form>
+<form class="inline" method="post" action="/rules/{{ r.id }}/delete"><button>Delete</button></form>
+</td>
+</tr>
+{% else %}
+<tr><td colspan="8" class="muted">No rules.</td></tr>
+{% endfor %}
+</table>
+</div>
+<h2>Add a rule</h2>
+<form method="post" action="/rules">
+<label>Id <input type="text" name="id" required></label>
+<label>Action <select name="action">{% for a in actions %}<option>{{ a }}</option>{% endfor %}</select></label>
+<p>Match: any of sha512, source, manufacturerCode, imageType, fileVersion (a number or {"min", "max"}), modelId, url (a pattern).</p>
+<textarea name="match" placeholder='{"manufacturerCode": 4660, "imageType": 1}'></textarea>
+<p>Set (set rules only): modelId, manufacturerName, minFileVersion, maxFileVersion, hardwareVersionMin, hardwareVersionMax, releaseNotes, otaHeaderString.</p>
+<textarea name="set" placeholder='{"hardwareVersionMin": 1}'></textarea>
+<p><label>Note <input type="text" name="note" size="60"></label></p>
+<button>Add</button>
+</form>
+{% endblock %}
