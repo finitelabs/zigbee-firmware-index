@@ -85,8 +85,8 @@ fails if the last good run is over 48 hours old, the snapshot's sha512 or the
 signature does not match, or the snapshot is empty. With `SIGNING_KEY_PUB` set,
 the site's key must be that key.
 
-The Check the site workflow runs it every 6 hours from GitHub, outside the
-homelab, once the repository variable `OTA_CHECK_ENABLED` is `true`. It reads
+The Check the site workflow runs it every 6 hours from GitHub, once the
+repository variable `OTA_CHECK_ENABLED` is `true`. It reads
 the variables `PUBLIC_URL` and `SIGNING_KEY_PUB`, and posts a failure to the
 secret `DISCORD_WEBHOOK_URL`. GitHub turns a schedule off after 60 days with no
 activity in the repository.
