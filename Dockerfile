@@ -8,6 +8,8 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY src ./src
+COPY LICENSE ./
+COPY LICENSES ./LICENSES
 
 RUN useradd --system --uid 10001 --no-create-home --home-dir /data app \
     && mkdir /data && chown app /data

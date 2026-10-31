@@ -125,6 +125,9 @@ make check test
   recompiles a changed one with pip-compile; `make install UPGRADE=1` upgrades
   them all.
 - `make image` builds the image locally.
+- `make manufacturers` regenerates `src/firmware_index/manufacturers.py`, the
+  CSA's manufacturer code list the admin page names makers from, from ZAP's
+  copy at the commit the Makefile names.
 - `tools/github-setup` checks the repository's settings against the Finite Labs
   standard; `--apply` fixes any drift.
 
@@ -136,4 +139,7 @@ A tag `vMAJOR.MINOR.PATCH` builds the image and pushes it to
 
 ## License
 
-AGPL-3.0.
+AGPL-3.0. `src/firmware_index/manufacturers.py` is generated from
+[ZAP](https://github.com/project-chip/zap)'s `manufacturers.xml`, Copyright (c)
+2008,2022 Silicon Labs, under the Apache License, Version 2.0, in
+`LICENSES/Apache-2.0.txt`.

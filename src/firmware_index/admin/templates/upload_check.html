@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "_macros.html" as m %}
 {% block content %}
 <div class="head">
   <div><h1>Check an upload</h1><p>The file has an OTA header{% if trimmed %} and was cut to its OTA image{% endif %}. Add what the header can't say, then save.</p></div>
@@ -7,11 +8,11 @@
 <div class="card">
   <h3>What the header says</h3>
   <div class="about">
-    <div class="k">Manufacturer code</div><div class="v mono">{{ image.manufacturer | hex4 }}</div>
+    <div class="k">Manufacturer</div><div class="v">{{ m.maker(image.manufacturer) }}</div>
     <div class="k">Image type</div><div class="v mono">{{ image.image_type | hex4 }}</div>
     <div class="k">File version</div><div class="v mono">{{ image.version | hex8 }}</div>
     <div class="k">Header string</div><div class="v">{{ image.header_string }}</div>
-    <div class="k">Size</div><div class="v">{{ size }} bytes</div>
+    <div class="k">Size</div><div class="v" title="{{ size }} bytes">{{ size | filesize }}</div>
     <div class="k">SHA-512</div><div class="v mono">{{ sha }}</div>
   </div>
 </div>

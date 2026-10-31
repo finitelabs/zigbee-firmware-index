@@ -21,7 +21,7 @@ from starlette.staticfiles import StaticFiles
 from starlette.templating import Jinja2Templates
 
 from firmware_index import db as dbm
-from firmware_index import ota, publish, rules, runner, sources
+from firmware_index import manufacturers, ota, publish, rules, runner, sources
 
 EMAIL_HEADER = "x-auth-request-email"
 LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1"}
@@ -35,6 +35,18 @@ TEMPLATES = Jinja2Templates(directory=Path(__file__).parent / "templates")
 TEMPLATES.env.filters["hex4"] = lambda n: f"0x{n:04X}" if isinstance(n, int) else ""
 TEMPLATES.env.filters["hex8"] = lambda n: f"0x{n:08X}" if isinstance(n, int) else ""
 TEMPLATES.env.filters["when"] = lambda t: t.replace("T", " ")[:16] + " UTC" if t else ""
+TEMPLATES.env.filters["maker"] = lambda n: manufacturers.NAMES.get(n, "")
+
+
+def filesize(n: int) -> str:
+    if n < 1024:
+        return f"{n} bytes"
+    if n < 1024 * 1024:
+        return f"{n / 1024:.0f} KB"
+    return f"{n / 1024 / 1024:.1f} MB"
+
+
+TEMPLATES.env.filters["filesize"] = filesize
 
 # zigpy's providers that list files on their own. Of its others, salus, thirdreality and inovelli
 # are stubs that list nothing, and the local ones and zigpy_remote need a folder or URL given.
@@ -462,6 +474,7 @@ async def edit_source(request: Request) -> Response:
 def search_text(e: dict) -> str:
     parts = [
         f"{e['manufacturerCode']:04x}",
+        manufacturers.NAMES.get(e["manufacturerCode"], ""),
         f"{e['imageType']:04x}",
         f"{e['fileVersion']:08x}",
         e["fileName"],

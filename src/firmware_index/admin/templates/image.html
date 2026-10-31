@@ -3,36 +3,38 @@
 {% block content %}
 {% set e = entries[0] %}
 {% set notes = entries | map(attribute="releaseNotes") | select | unique | list %}
+{% set origins = entries | map(attribute="originalUrl") | select | unique | list %}
+{% set ruled = entries | selectattr("rules") | list %}
 <div class="head">
-  <div><h1>{{ e.fileName }}</h1><p>{{ e.manufacturerCode | hex4 }} / {{ e.imageType | hex4 }}, version {{ e.fileVersion | hex8 }}</p></div>
+  <div><h1>{{ e.fileName }}</h1><p>{{ e.manufacturerCode | maker or e.manufacturerCode | hex4 }}, version {{ e.fileVersion | hex8 }}</p></div>
   <div class="actions"><a class="btn" href="/images">All images</a><a class="btn" href="{{ e.url }}">Download</a></div>
 </div>
 <div class="card">
   <h3>File</h3>
   <div class="about">
-    <div class="k">Manufacturer code</div><div class="v mono">{{ e.manufacturerCode | hex4 }}</div>
+    <div class="k">Manufacturer</div><div class="v">{{ m.maker(e.manufacturerCode) }}</div>
     <div class="k">Image type</div><div class="v mono">{{ e.imageType | hex4 }}</div>
     <div class="k">File version</div><div class="v mono">{{ e.fileVersion | hex8 }}</div>
-    <div class="k">Size</div><div class="v">{{ e.fileSize }} bytes</div>
-    <div class="k" title="The text the vendor put in the file's OTA header">Header</div><div class="v">{{ e.otaHeaderString }}</div>
+    <div class="k">Size</div><div class="v" title="{{ e.fileSize }} bytes">{{ e.fileSize | filesize }}</div>
+    {% if e.otaHeaderString %}<div class="k" title="The text the vendor put in the file's OTA header">Header</div><div class="v">{{ e.otaHeaderString }}</div>{% endif %}
     <div class="k">First seen</div><div class="v">{{ entries | map(attribute="firstSeen") | min | when }}</div>
+    {% if origins %}<div class="k" title="Where the source got the file">From</div><div class="v">{% for u in origins %}<a href="{{ u }}" title="{{ u }}">{{ u.split("/")[2] }}</a>{% if not loop.last %}, {% endif %}{% endfor %}</div>{% endif %}
     {% if e.upstreamSha512 %}<div class="k" title="The source's file had a vendor wrapper or trailing bytes; we publish only the OTA image inside it">Cut from</div><div class="v">a larger upstream file, SHA-512 <span class="mono">{{ e.upstreamSha512[:16] }}...</span></div>{% endif %}
-    <div class="k" title="The fingerprint of the file we publish. The driver checks every download against it.">SHA-512</div><div class="v mono">{{ e.sha512 }}</div>
+    <div class="k" title="The fingerprint of the file we publish. The driver checks every download against it.">SHA-512</div><div class="v"><span class="mono" title="{{ e.sha512 }}">{{ e.sha512[:16] }}...</span> <button type="button" class="btn small" data-copy="{{ e.sha512 }}">Copy</button></div>
   </div>
 </div>
 <div class="card flush">
   <h3>Listed for <span class="count">{{ entries | length }}</span></h3>
   <div class="tbl"><table>
-    <tr><th title="Only devices reporting this model are offered the file">Model</th><th title="Only devices reporting one of these manufacturer names are offered the file">Manufacturer names</th><th title="Only devices already running a version in this range are offered the file">Updates versions</th><th title="Only devices with a hardware version in this range take the file">Hardware</th><th>Sources</th><th>Rules</th><th title="Where the source got the file">From</th></tr>
+    <tr><th title="Only devices reporting this model are offered the file">Model</th><th title="Only devices reporting one of these manufacturer names are offered the file">Manufacturer names</th><th title="Only devices already running a version in this range are offered the file">Updates versions</th><th title="Only devices with a hardware version in this range take the file">Hardware</th><th>Sources</th>{% if ruled %}<th>Rules</th>{% endif %}</tr>
     {% for x in entries %}
     <tr>
-      <td>{{ x.modelId or "Any" }}</td>
-      <td>{{ (x.manufacturerName or ["Any"]) | join(", ") }}</td>
-      <td class="mono">{% if x.minFileVersion is defined or x.maxFileVersion is defined %}{{ x.minFileVersion | hex8 or "any" }} to {{ x.maxFileVersion | hex8 or "any" }}{% else %}<span class="muted">Any</span>{% endif %}</td>
-      <td>{% if x.hardwareVersionMin is defined or x.hardwareVersionMax is defined %}{{ x.hardwareVersionMin if x.hardwareVersionMin is defined else "any" }} to {{ x.hardwareVersionMax if x.hardwareVersionMax is defined else "any" }}{% else %}<span class="muted">Any</span>{% endif %}</td>
+      <td>{{ x.modelId or m.any() }}</td>
+      <td>{{ x.manufacturerName | join(", ") if x.manufacturerName else m.any() }}</td>
+      <td>{% if x.minFileVersion is defined or x.maxFileVersion is defined %}<span class="mono">{{ x.minFileVersion | hex8 or "any" }} to {{ x.maxFileVersion | hex8 or "any" }}</span>{% else %}{{ m.any() }}{% endif %}</td>
+      <td>{% if x.hardwareVersionMin is defined or x.hardwareVersionMax is defined %}{{ x.hardwareVersionMin if x.hardwareVersionMin is defined else "any" }} to {{ x.hardwareVersionMax if x.hardwareVersionMax is defined else "any" }}{% else %}{{ m.any() }}{% endif %}</td>
       <td>{% for s in x.sources %}<span class="tag">{{ s }}</span>{% endfor %}</td>
-      <td>{% for r in x.rules or [] %}<span class="tag">{{ r }}</span>{% endfor %}</td>
-      <td>{% if x.originalUrl %}<a href="{{ x.originalUrl }}" title="{{ x.originalUrl }}">{{ x.originalUrl.split("/")[2] }}</a>{% endif %}</td>
+      {% if ruled %}<td>{% for r in x.rules or [] %}<span class="tag">{{ r }}</span>{% endfor %}</td>{% endif %}
     </tr>
     {% endfor %}
   </table></div>

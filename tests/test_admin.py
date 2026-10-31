@@ -242,6 +242,20 @@ def test_rules_are_added_checked_switched_deleted_and_downloaded(admin):
     ]
 
 
+def test_images_name_their_manufacturer_and_search_by_it(admin):
+    a, b = "a" * 128, "b" * 128
+    big = {**entry(a, 0x100B, "Bulb"), "fileSize": 258104, "otaHeaderString": ""}
+    publish_entries(admin, [big, entry(b, 0x1407, "Sensor")])
+    listed = admin.get("/images", params={"q": "signify"}).text
+    assert "Signify Netherlands B.V." in listed and "Sensor.ota" not in listed
+    assert ">252 KB<" in listed
+    page = admin.get(f"/images/{a}").text
+    assert "Signify Netherlands B.V., version 0x00000020" in page
+    assert ">Header<" not in page and f'data-copy="{a}"' in page
+    unregistered = admin.get(f"/images/{b}").text
+    assert "Not in the CSA's manufacturer code list" in unregistered and "0x1407" in unregistered
+
+
 def test_an_upload_is_checked_cut_to_its_image_and_saved(admin):
     core = ota_file(0x1234, 1, 0x30)
     wrapped = b"NGIS" + bytes(36) + core + b"\xaa" * 8

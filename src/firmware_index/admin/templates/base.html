@@ -100,7 +100,7 @@ td.end { text-align: right; white-space: nowrap; }
 .rows .meta span[title] { cursor: help; }
 .rows .side { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: flex-end; }
 .rows .side .tag { margin: 0; }
-.rows .meta .tag { font-family: var(--font); }
+.rows .meta .tag, .rows .meta .maker { font-family: var(--font); }
 .rows .note-line { margin-top: 3px; }
 .small { font-size: 11px; }
 .rows .size { min-width: 52px; text-align: right; font-variant-numeric: tabular-nums; }
@@ -192,6 +192,14 @@ function placeTip(h) {
 document.querySelectorAll(".help").forEach(function (h) {
   h.addEventListener("mouseenter", function () { placeTip(h); });
   h.addEventListener("focus", function () { placeTip(h); });
+});
+document.querySelectorAll("[data-copy]").forEach(function (b) {
+  b.addEventListener("click", function () {
+    navigator.clipboard.writeText(b.dataset.copy).then(function () {
+      b.textContent = "Copied";
+      setTimeout(function () { b.textContent = "Copy"; }, 1500);
+    });
+  });
 });
 document.querySelectorAll("[data-close]").forEach(function (b) {
   b.addEventListener("click", function () { document.getElementById(b.dataset.close).hidden = true; });
