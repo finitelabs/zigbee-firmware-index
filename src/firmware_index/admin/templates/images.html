@@ -11,23 +11,30 @@
     <span class="muted">{{ total }} {{ ("match" if total == 1 else "matches") if q else "entries" }}{% if total > limit %}; the first {{ limit }} shown{% endif %}</span>
   </form>
 </div>
-<div class="card flush"><div class="tbl"><table>
-<tr><th title="The Zigbee manufacturer code in the file's header">Manufacturer</th><th title="The vendor's number for which firmware this is; with the manufacturer code it says which devices take it">Image type</th><th title="The firmware version the file installs">Version</th><th title="The model this entry is listed for; empty means any model with this manufacturer code and image type">Model</th><th>File</th><th class="num">Size</th><th title="Every source that listed this same file">Sources</th><th></th></tr>
+<div class="card flush"><div class="rows">
 {% for e in entries %}
-<tr>
-  <td class="mono">{{ e.manufacturerCode | hex4 }}</td>
-  <td class="mono">{{ e.imageType | hex4 }}</td>
-  <td class="mono">{{ e.fileVersion | hex8 }}</td>
-  <td>{{ e.modelId or "" }}{% if e.manufacturerName %}<div class="muted">{{ e.manufacturerName | join(", ") }}</div>{% endif %}</td>
-  <td class="file"><a href="{{ e.url }}">{{ e.fileName }}</a>{% if e.rules %}<div>{% for r in e.rules %}<span class="tag">{{ r }}</span>{% endfor %}</div>{% endif %}</td>
-  <td class="num">{{ "%.0f" | format(e.fileSize / 1024) }} KB</td>
-  <td>{% for s in e.sources %}<span class="tag">{{ s }}</span>{% endfor %}</td>
-  <td class="end"><a class="btn small" href="/images/{{ e.sha512 }}">Manage</a></td>
-</tr>
+<div class="row">
+  <div class="main">
+    <a class="name" href="/images/{{ e.sha512 }}">{{ e.fileName }}</a>
+    <div class="meta">
+      <span title="The Zigbee manufacturer code in the file's header"><b>mfr</b> {{ e.manufacturerCode | hex4 }}</span>
+      <span title="The vendor's number for which firmware this is; with the manufacturer code it says which devices take it"><b>type</b> {{ e.imageType | hex4 }}</span>
+      <span title="The firmware version the file installs"><b>version</b> {{ e.fileVersion | hex8 }}</span>
+      {% if e.modelId %}<span title="The model this entry is listed for"><b>model</b> {{ e.modelId }}</span>{% endif %}
+      {% if e.manufacturerName %}<span><b>maker</b> {{ e.manufacturerName | join(", ") }}</span>{% endif %}
+    </div>
+    {% if e.rules %}<div>{% for r in e.rules %}<span class="tag">{{ r }}</span>{% endfor %}</div>{% endif %}
+  </div>
+  <div class="side">
+    {% for s in e.sources %}<span class="tag" title="A source that listed this file">{{ s }}</span>{% endfor %}
+    <span class="muted size">{{ "%.0f" | format(e.fileSize / 1024) }} KB</span>
+    <a class="btn small" href="/images/{{ e.sha512 }}">Manage</a>
+  </div>
+</div>
 {% else %}
-<tr><td colspan="8" class="empty">{% if q %}Nothing matches.{% else %}Nothing published yet.{% endif %}</td></tr>
+<div class="row empty">{% if q %}Nothing matches.{% else %}Nothing published yet.{% endif %}</div>
 {% endfor %}
-</table></div></div>
+</div></div>
 {{ m.report_lists(report) }}
 <p class="hint">A held or dropped image comes back when its rule is switched off on the Rules page.</p>
 {% endblock %}

@@ -28,25 +28,25 @@
     <div class="split"><button class="btn primary">Add rule</button></div>
   </form>
 </div>
-<div class="card flush"><div class="tbl"><table>
-<tr><th>Rule</th><th>Action</th><th>Matches</th><th>Sets</th><th>Note</th><th>Added</th><th></th></tr>
+<div class="card flush"><div class="rows">
 {% for r in rules %}
-<tr>
-  <td class="mono">{{ r.id }}</td>
-  <td>{{ m.action_pill(r.action) }}{% if not r.enabled %} <span class="pill info">Off</span>{% endif %}</td>
-  <td>{% for k, v in r.match | pairs %}<span class="tag"><b>{{ k }}</b>{{ v }}</span>{% endfor %}</td>
-  <td>{% for k, v in r.set | pairs %}<span class="tag long"><b>{{ k }}</b>{{ v }}</span>{% endfor %}</td>
-  <td>{{ r.note }}</td>
-  <td class="muted">{{ r.author }}<br>{{ r.created | when }}</td>
-  <td class="end">
+<div class="row">
+  <div class="main">
+    <div><span class="name mono">{{ r.id }}</span> {{ m.action_pill(r.action) }}{% if not r.enabled %} <span class="pill info">Off</span>{% endif %}</div>
+    <div class="meta"><span><b>matches</b></span>{% for k, v in r.match | pairs %}<span class="tag"><b>{{ k }}</b>{{ v }}</span>{% endfor %}</div>
+    {% if r.set %}<div class="meta"><span><b>sets</b></span>{% for k, v in r.set | pairs %}<span class="tag long"><b>{{ k }}</b>{{ v }}</span>{% endfor %}</div>{% endif %}
+    {% if r.note %}<div class="note-line">{{ r.note }}</div>{% endif %}
+    <div class="muted small">{{ r.author }}, {{ r.created | when }}</div>
+  </div>
+  <div class="side">
     <form class="inline" method="post" action="/rules/{{ r.id }}/toggle"><button class="btn small">{{ "Switch off" if r.enabled else "Switch on" }}</button></form>
     <form class="inline" method="post" action="/rules/{{ r.id }}/delete"><button class="btn small danger">Delete</button></form>
-  </td>
-</tr>
+  </div>
+</div>
 {% else %}
-<tr><td colspan="7" class="empty">No rules. Hold, drop or correct an image from its page, or add one here.</td></tr>
+<div class="row empty">No rules. Hold, drop or correct an image from its page, or add one here.</div>
 {% endfor %}
-</table></div></div>
+</div></div>
 <script>
 var action = document.getElementById("action");
 function showSets() { document.getElementById("sets").hidden = action.value !== "set"; }
