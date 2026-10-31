@@ -57,7 +57,13 @@ CREATE TABLE runs (
   finished TEXT,
   status TEXT,
   anyway INTEGER NOT NULL DEFAULT 0,
-  report TEXT
+  report TEXT,
+  result_sha512 TEXT
+);
+CREATE TABLE snapshots (
+  sha512 TEXT PRIMARY KEY,
+  entries TEXT NOT NULL,
+  created TEXT NOT NULL
 );
 CREATE TABLE published (
   id INTEGER PRIMARY KEY CHECK (id = 1),

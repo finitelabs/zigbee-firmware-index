@@ -21,7 +21,7 @@ from starlette.staticfiles import StaticFiles
 from starlette.templating import Jinja2Templates
 
 from firmware_index import db as dbm
-from firmware_index import ota, rules, runner, sources
+from firmware_index import ota, publish, rules, runner, sources
 
 EMAIL_HEADER = "x-auth-request-email"
 LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1"}
@@ -162,11 +162,19 @@ async def healthz(request: Request) -> Response:
     return PlainTextResponse("ok")
 
 
-async def runs(request: Request) -> Response:
+async def runs_page(request: Request) -> Response:
     db = open_db(request)
     rows = db.execute("SELECT * FROM runs ORDER BY id DESC LIMIT 30").fetchall()
-    shown = [{**dict(r), "report": json.loads(r["report"] or "{}")} for r in rows]
-    published = db.execute("SELECT snapshot, at FROM published WHERE id = 1").fetchone()
+    published = db.execute(
+        "SELECT snapshot, sha512, at, json_array_length(entries) AS count"
+        " FROM published WHERE id = 1"
+    ).fetchone()
+    shown = with_actions(db, [{**dict(r), "report": json.loads(r["report"] or "{}")} for r in rows])
+    # Waiting comes from the last run that read the sources; a republish reads none.
+    read = next(
+        (r for r in shown if r["report"].get("counts") and not r["report"].get("republished")),
+        None,
+    )
     on, at = runner.schedule(db)
     now = dbm.now()
     upcoming = None
@@ -177,6 +185,7 @@ async def runs(request: Request) -> Response:
         "runs.html",
         runs=shown,
         published=published,
+        waiting=read["report"]["counts"]["waiting"] if read else None,
         schedule_on=on,
         schedule_at=at,
         upcoming=upcoming,
@@ -196,26 +205,104 @@ async def save_schedule(request: Request) -> Response:
     return back("/", f"Runs every day at {at} UTC" if on else "Scheduled runs are off")
 
 
+def with_actions(db, runs: list[dict]) -> list[dict]:
+    """Mark the run whose index is live, and what each other run offers: a braked run's index
+    can be published, and an earlier published one rolled back to."""
+    row = db.execute("SELECT sha512 FROM published WHERE id = 1").fetchone()
+    live = row["sha512"] if row else None
+    marked = False
+    for r in runs:
+        r["action"] = None
+        if not r.get("result_sha512") or r["status"] not in ("ok", "brake"):
+            continue
+        if r["result_sha512"] == live:
+            r["action"] = None if marked else "live"
+            marked = True
+        else:
+            r["action"] = "publish" if r["status"] == "brake" else "rollback"
+    return runs
+
+
+def run_row(db, run_id) -> dict | None:
+    row = db.execute("SELECT * FROM runs WHERE id = ?", (run_id,)).fetchone()
+    return {**dict(row), "report": json.loads(row["report"] or "{}")} if row else None
+
+
 async def run_detail(request: Request) -> Response:
-    row = (
-        open_db(request)
-        .execute("SELECT * FROM runs WHERE id = ?", (request.path_params["id"],))
-        .fetchone()
-    )
-    if row is None:
+    db = open_db(request)
+    run = run_row(db, request.path_params["id"])
+    if run is None:
         return PlainTextResponse("No such run", 404)
-    return page(request, "run.html", run=dict(row), report=json.loads(row["report"] or "{}"))
+    newest = db.execute(
+        "SELECT * FROM runs WHERE result_sha512 = ? ORDER BY id DESC LIMIT 1",
+        (run.get("result_sha512"),),
+    ).fetchone()
+    others = [{**dict(newest), "report": {}}] if newest and newest["id"] != run["id"] else []
+    with_actions(db, others + [run])
+    return page(request, "run.html", run=run, report=run["report"])
 
 
 async def publish_now(request: Request) -> Response:
-    form = await request.form()
-    anyway = form.get("anyway") == "1"
     try:
-        await request.app.state.start_publish(anyway)
+        await request.app.state.runs.start(False)
     except Exception as e:
         return back("/", f"Could not start a run: {e}")
-    dbm.audit(open_db(request), request.state.user, "publish", {"anyway": anyway})
+    dbm.audit(open_db(request), request.state.user, "publish", {})
     return back("/", "Started a run; refresh to follow it")
+
+
+def describe(e: dict) -> str:
+    model = f" {e['modelId']}" if e.get("modelId") else ""
+    return f"{e['fileName']} ({e['manufacturerCode']:04X}/{e['imageType']:04X}{model})"
+
+
+async def confirm_publish(request: Request) -> Response:
+    db = open_db(request)
+    run = run_row(db, request.path_params["id"])
+    if run is None:
+        return PlainTextResponse("No such run", 404)
+    with_actions(db, [run])
+    if run["action"] not in ("publish", "rollback"):
+        return back(f"/runs/{run['id']}", "This run's index is live, or it kept none to publish")
+    kept = db.execute(
+        "SELECT entries FROM snapshots WHERE sha512 = ?", (run["result_sha512"],)
+    ).fetchone()
+    live = db.execute("SELECT entries FROM published WHERE id = 1").fetchone()
+    entries = json.loads(kept["entries"])
+    before = json.loads(live["entries"]) if live else []
+    old = {publish.identity(e): e for e in before}
+    new = {publish.identity(e): e for e in entries}
+    added = [describe(new[k]) for k in new.keys() - old.keys()]
+    removed = [describe(old[k]) for k in old.keys() - new.keys()]
+    return page(
+        request,
+        "publish.html",
+        run=run,
+        count=len(entries),
+        live=len(before),
+        added=sorted(added),
+        removed=sorted(removed),
+    )
+
+
+async def publish_run(request: Request) -> Response:
+    db = open_db(request)
+    run = run_row(db, request.path_params["id"])
+    if run is None:
+        return PlainTextResponse("No such run", 404)
+    with_actions(db, [run])
+    form = await request.form()
+    if run["action"] not in ("publish", "rollback"):
+        return back(f"/runs/{run['id']}", "This run's index is live, or it kept none to publish")
+    if run["action"] == "publish" and (form.get("confirm") or "").strip() != "publish":
+        return back(f"/runs/{run['id']}/publish", "Type publish to confirm")
+    try:
+        await request.app.state.runs.republish(run["id"])
+    except Exception as e:
+        return back(f"/runs/{run['id']}", f"Could not publish: {e}")
+    dbm.audit(db, request.state.user, run["action"], {"run": run["id"]})
+    done = "Rolled back to" if run["action"] == "rollback" else "Published"
+    return back("/", f"{done} run #{run['id']}'s index")
 
 
 async def sources_page(request: Request) -> Response:
@@ -673,16 +760,16 @@ async def audit_page(request: Request) -> Response:
 def create_app(
     data: Path,
     emails: set[str],
-    start_publish,
+    runs,
     local_user: str | None = None,
     site: Path | None = None,
-    scheduler=None,
 ) -> Starlette:
-    """The admin page. `start_publish` starts a run; `scheduler`, if given, runs alongside the
-    app. Run locally, `site` is the published folder, served at /site."""
+    """The admin page. `runs` starts and republishes runs, and its `loop`, if it has one, runs
+    alongside the app. Run locally, `site` is the published folder, served at /site."""
 
     @contextlib.asynccontextmanager
     async def lifespan(app):
+        scheduler = getattr(runs, "loop", None)
         task = asyncio.create_task(scheduler()) if scheduler else None
         yield
         if task:
@@ -694,8 +781,10 @@ def create_app(
         routes=local
         + [
             Route("/healthz", healthz),
-            Route("/", runs),
+            Route("/", runs_page),
             Route("/runs/{id:int}", run_detail),
+            Route("/runs/{id:int}/publish", confirm_publish),
+            Route("/runs/{id:int}/publish", publish_run, methods=["POST"]),
             Route("/publish", publish_now, methods=["POST"]),
             Route("/schedule", save_schedule, methods=["POST"]),
             Route("/sources", sources_page),
@@ -718,6 +807,6 @@ def create_app(
     )
     app.state.db_path = data / "index.sqlite3"
     app.state.uploads = data / "uploads"
-    app.state.start_publish = start_publish
+    app.state.runs = runs
     dbm.connect(app.state.db_path).close()
     return Guard(app, {e.strip().lower() for e in emails if e.strip()}, local_user)

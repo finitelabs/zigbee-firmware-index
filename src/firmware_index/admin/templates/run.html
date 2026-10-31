@@ -2,9 +2,9 @@
 {% import "_macros.html" as m %}
 {% block content %}
 <div class="head">
-  <div><h1>Run #{{ run.id }} {{ m.run_pill(run.status) }}{% if run.anyway %} <span class="tag">published anyway</span>{% endif %}</h1>
+  <div><h1>Run #{{ run.id }} {{ m.run_pill(run.status) }}{% if report.republished %} <span class="tag">published run #{{ report.republished }}'s index</span>{% endif %}</h1>
   <p>Started {{ run.started | when }}{% if run.finished %}, finished {{ run.finished | when }}{% endif %}.{% if report.snapshot %} Snapshot <code>{{ report.snapshot.split("/")[-1] }}</code>, {{ "new" if report.changed else "unchanged" }}.{% endif %}</p></div>
-  <div class="actions"><a class="btn" href="/">All runs</a></div>
+  <div class="actions">{{ m.run_action(run) }}<a class="btn" href="/">All runs</a></div>
 </div>
 {% if report.alerts %}<div class="card"><h3>Alerts</h3>{% for a in report.alerts %}<div>{{ a }}</div>{% endfor %}</div>{% endif %}
 {% if report.counts %}

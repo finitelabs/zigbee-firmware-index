@@ -80,6 +80,20 @@ class Runner:
             finally:
                 db.close()
 
+    async def republish(self, run_id: int) -> publish.Report:
+        """Publish the index an earlier run built, now, in place of the live one."""
+        if self.running:
+            raise RuntimeError("a run is already going")
+        db = dbm.connect(self.data / "index.sqlite3")
+        try:
+            report = await publish.republish(db, self.settings_for(True), run_id)
+        finally:
+            db.close()
+        await notify.post(self.webhook, report)
+        if report.status != publish.OK:
+            raise RuntimeError("; ".join(report.alerts) or "it failed")
+        return report
+
     async def tick(self, now: datetime.datetime) -> bool:
         db = dbm.connect(self.data / "index.sqlite3")
         try:

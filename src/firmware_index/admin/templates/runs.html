@@ -5,15 +5,14 @@
 <div class="head">
   <div><h1>Runs</h1><p>Each run reads the sources, checks every new file, applies the rules and publishes the index.</p></div>
   <div class="actions">
-    <form class="inline" method="post" action="/publish"><input type="hidden" name="anyway" value="0"><button class="btn primary">Publish now</button></form>
-    <form class="inline" method="post" action="/publish"><input type="hidden" name="anyway" value="1"><button class="btn">Publish anyway</button></form>{{ m.help("A run that would remove more than 5% of the index stops and keeps the last one (the brake). Publish anyway lets it through, for when the drop is expected.") }}
+    <form class="inline" method="post" action="/publish"><button class="btn primary">Publish now</button></form>{{ m.help("Runs now instead of waiting for the schedule. If the run would remove more than 5% of the index, the brake keeps the live one; publish that run from its row once you have checked it.") }}
   </div>
 </div>
 <div class="card">
   <h3>Published</h3>
   <div class="stats">
-    <div class="stat"><div class="k">Entries</div><div class="v">{{ last.report.counts.entries if last and last.report.counts else "-" }}</div></div>
-    <div class="stat"><div class="k">Waiting {{ m.help("New entries from a source with a delay, not yet listed long enough to publish.") }}</div><div class="v">{{ last.report.counts.waiting if last and last.report.counts else "-" }}</div></div>
+    <div class="stat"><div class="k" title="Entries in the live index">Live entries</div><div class="v">{{ published.count if published else "-" }}</div></div>
+    <div class="stat"><div class="k">Waiting {{ m.help("New entries from a source with a delay, not yet listed long enough to publish.") }}</div><div class="v">{{ waiting if waiting is not none else "-" }}</div></div>
     <div class="stat"><div class="k">Last run</div><div class="v small">{% if last %}{{ m.run_pill(last.status) }}{% else %}None yet{% endif %}</div></div>
     <div class="stat" title="{{ published.snapshot if published }}"><div class="k">Index last changed</div><div class="v small">{{ published.at | when if published else "Not yet" }}</div></div>
   </div>
@@ -30,18 +29,19 @@
 <div class="card flush">
   <h3>Recent runs</h3>
   <div class="tbl"><table>
-    <tr><th>Run</th><th>Started</th><th>Status</th><th class="num">Entries</th><th class="num" title="Entries this run published that the one before did not have">Added</th><th class="num" title="Entries the run before published that this one did not">Removed</th><th class="num" title="Files that failed a check: download, checksum or header">Failed</th><th class="num" title="Entries kept out by a hold rule">Held</th><th class="num" title="New entries waiting out their source's delay">Waiting</th><th>Alerts</th></tr>
+    <tr><th>Run</th><th>Started</th><th>Status</th><th class="num">Entries</th><th class="num" title="Entries this run published that the one before did not have">Added</th><th class="num" title="Entries the run before published that this one did not">Removed</th><th class="num" title="Files that failed a check: download, checksum or header">Failed</th><th class="num" title="Entries kept out by a hold rule">Held</th><th class="num" title="New entries waiting out their source's delay">Waiting</th><th>Alerts</th><th></th></tr>
     {% for r in runs %}{% set c = r.report.counts or {} %}
     <tr>
       <td><a href="/runs/{{ r.id }}">#{{ r.id }}</a></td>
       <td class="nowrap">{{ r.started | when }}</td>
-      <td>{{ m.run_pill(r.status) }}{% if r.anyway %} <span class="tag">anyway</span>{% endif %}</td>
+      <td>{{ m.run_pill(r.status) }}{% if r.report.republished %} <span class="tag" title="This run published the index run #{{ r.report.republished }} built">from #{{ r.report.republished }}</span>{% endif %}</td>
       <td class="num">{{ c.entries }}</td><td class="num">{{ c.added }}</td><td class="num">{{ c.removed }}</td>
       <td class="num">{{ c.failed }}</td><td class="num">{{ c.held }}</td><td class="num">{{ c.waiting }}</td>
       <td class="muted">{{ (r.report.alerts or []) | join("; ") }}</td>
+      <td class="end">{{ m.run_action(r) }}</td>
     </tr>
     {% else %}
-    <tr><td colspan="10" class="empty">No runs yet. Publish now starts the first.</td></tr>
+    <tr><td colspan="11" class="empty">No runs yet. Publish now starts the first.</td></tr>
     {% endfor %}
   </table></div>
 </div>

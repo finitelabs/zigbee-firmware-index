@@ -4,9 +4,16 @@
 
 {% macro run_pill(status) -%}
 {%- if status == "ok" -%}<span class="pill online">OK</span>
-{%- elif status == "brake" -%}<span class="pill pending" title="This run would have removed more than 5% of the index, so the last index stayed. Publish anyway lets it through.">Brake</span>
+{%- elif status == "brake" -%}<span class="pill pending" title="This run would have removed more than 5% of the index, so the live index stayed. Once you have checked it, publish it from its row.">Brake</span>
 {%- elif status == "failed" -%}<span class="pill offline" title="The run stopped before publishing; its page has the alert.">Failed</span>
 {%- else -%}<span class="pill blue">Running</span>
+{%- endif -%}
+{%- endmacro %}
+
+{% macro run_action(r) -%}
+{%- if r.action == "live" -%}<span class="pill online" title="The index readers get now">Live</span>
+{%- elif r.action == "publish" -%}<a class="btn small danger" href="/runs/{{ r.id }}/publish">Publish</a>
+{%- elif r.action == "rollback" -%}<a class="btn small" href="/runs/{{ r.id }}/publish">Roll back</a>
 {%- endif -%}
 {%- endmacro %}
 

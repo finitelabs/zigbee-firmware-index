@@ -53,9 +53,12 @@ header from anything a client sends; the page lets in only the emails in
 `ADMIN_EMAILS`. A form is accepted only from the page's own origin. `/healthz`
 needs no sign-in.
 
-- **Runs**: each run's report, Publish now and Publish anyway, and the schedule:
-  one run a day at a set UTC time, on or off. A run missed while the app was
-  down starts when it is back that day. One run at a time.
+- **Runs**: each run's report, Publish now, and the schedule: one run a day at
+  a set UTC time, on or off. A run missed while the app was down starts when it
+  is back that day. One run at a time. Every run keeps the index it built, so
+  from its row an earlier run can be rolled back to, and a run the brake held can
+  be published as it was built, once you type `publish` to confirm. Either goes
+  out as a new snapshot.
 - **Sources**: priority, delay, on or off, and each source's config.
 - **Images**: search the published index; hold, drop or correct one file, each
   by adding a rule.

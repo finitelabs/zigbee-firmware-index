@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m %}
+{% block content %}
+{% set braked = run.action == "publish" %}
+<div class="head">
+  <div><h1>{{ "Publish" if braked else "Roll back to" }} run #{{ run.id }}'s index</h1>
+  <p>{% if braked %}The brake held this run because it would remove more than 5% of the index. Publishing it makes its index live as it was built; nothing is fetched again.{% else %}This makes the index run #{{ run.id }} published on {{ run.started | when }} live again, as a new snapshot.{% endif %}</p></div>
+  <div class="actions"><a class="btn" href="/runs/{{ run.id }}">Cancel</a></div>
+</div>
+<div class="card">
+  <h3>What changes</h3>
+  <div class="stats">
+    <div class="stat"><div class="k">Live now</div><div class="v">{{ live }}</div></div>
+    <div class="stat"><div class="k">After</div><div class="v">{{ count }}</div></div>
+    <div class="stat"><div class="k">Added</div><div class="v">{{ added | length }}</div></div>
+    <div class="stat"><div class="k">Removed</div><div class="v">{{ removed | length }}</div></div>
+  </div>
+  {% if removed %}<details class="split"><summary>Removed <span class="muted">({{ removed | length }})</span></summary><div class="list">{% for e in removed %}<div>{{ e }}</div>{% endfor %}</div></details>{% endif %}
+  {% if added %}<details class="split"><summary>Added <span class="muted">({{ added | length }})</span></summary><div class="list">{% for e in added %}<div>{{ e }}</div>{% endfor %}</div></details>{% endif %}
+</div>
+<div class="card">
+  <form method="post" action="/runs/{{ run.id }}/publish">
+    {% if braked %}
+    <div class="fields">
+      <div class="field wide"><label>Type <b>publish</b> to confirm</label><input type="text" name="confirm" autocomplete="off" required></div>
+      <button class="btn danger">Publish run #{{ run.id }}'s index</button>
+    </div>
+    {% else %}
+    <button class="btn primary">Roll back to run #{{ run.id }}'s index</button>
+    {% endif %}
+  </form>
+  <p class="hint">The next run builds the index again from the sources. To keep a file out after this, hold or drop it.</p>
+</div>
+{% endblock %}
