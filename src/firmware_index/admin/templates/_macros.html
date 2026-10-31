@@ -2,6 +2,13 @@
 <span class="help" tabindex="0" role="note" aria-label="{{ text }}" data-tip="{{ text }}">?</span>
 {%- endmacro %}
 
+{% macro maker(code) -%}
+{%- if code | maker -%}{{ code | maker }} <span class="muted mono">{{ code | hex4 }}</span>
+{%- else -%}<span class="mono" title="Not in the CSA's manufacturer code list">{{ code | hex4 }}</span>{%- endif -%}
+{%- endmacro %}
+
+{% macro any() -%}<span class="muted">Any</span>{%- endmacro %}
+
 {% macro run_pill(status) -%}
 {%- if status == "ok" -%}<span class="pill online">OK</span>
 {%- elif status == "brake" -%}<span class="pill pending" title="This run would have removed more than 5% of the index, so the live index stayed. Once you have checked it, publish it from its row.">Brake</span>
@@ -25,7 +32,7 @@
 {%- endmacro %}
 
 {% macro entry_line(e) -%}
-<span class="name">{{ e.fileName }}</span><span class="muted mono">{{ e.manufacturerCode | hex4 }}/{{ e.imageType | hex4 }}{% if e.modelId %} {{ e.modelId }}{% endif %}</span>
+<span class="name">{{ e.fileName }}</span><span class="muted">{{ e.manufacturerCode | maker or e.manufacturerCode | hex4 }}{% if e.modelId %}, {{ e.modelId }}{% endif %}</span>
 {%- endmacro %}
 
 {% macro diff_view(changes) -%}

@@ -6,7 +6,7 @@
 </div>
 <div class="card">
   <form method="get" action="/images" class="fields">
-    <div class="field wide"><label>Search</label><input type="search" name="q" value="{{ q }}" placeholder="Vendor, model, file name, source, or a manufacturer code or image type in hex"></div>
+    <div class="field wide"><label>Search</label><input type="search" name="q" value="{{ q }}" placeholder="Manufacturer, model, file name, source, or a code in hex"></div>
     <button class="btn primary">Search</button>
     <span class="muted">{{ total }} {{ ("match" if total == 1 else "matches") if q else "entries" }}{% if total > limit %}; the first {{ limit }} shown{% endif %}</span>
   </form>
@@ -17,17 +17,17 @@
   <div class="main">
     <a class="name" href="/images/{{ e.sha512 }}">{{ e.fileName }}</a>
     <div class="meta">
-      <span title="The Zigbee manufacturer code in the file's header"><b>mfr</b> {{ e.manufacturerCode | hex4 }}</span>
+      {% if e.manufacturerCode | maker %}<span class="maker" title="Manufacturer code {{ e.manufacturerCode | hex4 }}">{{ e.manufacturerCode | maker }}</span>{% else %}<span title="The Zigbee manufacturer code in the file's header; not in the CSA's list"><b>mfr</b> {{ e.manufacturerCode | hex4 }}</span>{% endif %}
       <span title="The vendor's number for which firmware this is; with the manufacturer code it says which devices take it"><b>type</b> {{ e.imageType | hex4 }}</span>
       <span title="The firmware version the file installs"><b>version</b> {{ e.fileVersion | hex8 }}</span>
       {% if e.modelId %}<span title="The model this entry is listed for"><b>model</b> {{ e.modelId }}</span>{% endif %}
-      {% if e.manufacturerName %}<span><b>maker</b> {{ e.manufacturerName | join(", ") }}</span>{% endif %}
+      {% if e.manufacturerName %}<span title="Only devices reporting one of these manufacturer names are offered the file"><b>names</b> {{ e.manufacturerName | join(", ") }}</span>{% endif %}
     </div>
     {% if e.rules %}<div>{% for r in e.rules %}<span class="tag">{{ r }}</span>{% endfor %}</div>{% endif %}
   </div>
   <div class="side">
     {% for s in e.sources %}<span class="tag" title="A source that listed this file">{{ s }}</span>{% endfor %}
-    <span class="muted size">{{ "%.0f" | format(e.fileSize / 1024) }} KB</span>
+    <span class="muted size">{{ e.fileSize | filesize }}</span>
     <a class="btn small" href="/images/{{ e.sha512 }}">Manage</a>
   </div>
 </div>

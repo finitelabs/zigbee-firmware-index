@@ -46,6 +46,14 @@ test:
 dev:
 	PYTHONPATH=src python -m firmware_index serve --local .dev
 
+# The CSA's manufacturer code list, from ZAP at a fixed commit.
+ZAP_MANUFACTURERS = https://raw.githubusercontent.com/project-chip/zap/838ec3b237b068d9258bcfde062d3cb0d099e040/zcl-builtin/shared/manufacturers.xml
+
+.PHONY: manufacturers
+manufacturers:
+	python tools/manufacturers.py $(ZAP_MANUFACTURERS) src/firmware_index/manufacturers.py
+	black src/firmware_index/manufacturers.py
+
 .PHONY: image
 image:
 	docker build -t $(IMAGE):dev .

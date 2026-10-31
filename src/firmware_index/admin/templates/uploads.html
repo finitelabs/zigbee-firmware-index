@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "_macros.html" as m %}
 {% block content %}
 <div class="head">
   <div><h1>Uploads</h1><p>Our own files, such as firmware a vendor sends us. Each is checked and cut to its OTA image before it is saved, and goes out on the next run.</p></div>
@@ -18,7 +19,7 @@
 {% for u in uploads %}
 <tr>
   <td>{{ u.file_name }}<div class="muted mono">{{ u.sha512[:16] }}</div></td>
-  <td class="mono">{{ u.fields.manufacturer | hex4 }}</td>
+  <td>{{ m.maker(u.fields.manufacturer) }}</td>
   <td class="mono">{{ u.fields.image_type | hex4 }}</td>
   <td class="mono">{{ u.fields.version | hex8 }}</td>
   <td>{{ u.fields.model_id or "" }}</td>
