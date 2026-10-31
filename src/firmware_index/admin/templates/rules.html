@@ -3,29 +3,10 @@
 {% block content %}
 <div class="head">
   <div><h1>Rules</h1><p>Rules drop, hold or correct entries. A drop beats a hold; set rules apply in order. Changes apply from the next run.</p></div>
-  <div class="actions"><a class="btn" href="/rules.yaml">Download YAML</a></div>
+  <div class="actions"><a class="btn" href="/rules.yaml">Download YAML</a><button type="button" class="btn primary" data-open="add">Add a rule</button></div>
 </div>
-<div class="card flush"><div class="tbl"><table>
-<tr><th>Rule</th><th>Action</th><th>Matches</th><th>Sets</th><th>Note</th><th>Added</th><th></th></tr>
-{% for r in rules %}
-<tr>
-  <td class="mono">{{ r.id }}</td>
-  <td>{{ m.action_pill(r.action) }}{% if not r.enabled %} <span class="pill info">Off</span>{% endif %}</td>
-  <td>{% for k, v in r.match | pairs %}<span class="tag"><b>{{ k }}</b>{{ v }}</span>{% endfor %}</td>
-  <td>{% for k, v in r.set | pairs %}<span class="tag long"><b>{{ k }}</b>{{ v }}</span>{% endfor %}</td>
-  <td>{{ r.note }}</td>
-  <td class="muted">{{ r.author }}<br>{{ r.created | when }}</td>
-  <td class="end">
-    <form class="inline" method="post" action="/rules/{{ r.id }}/toggle"><button class="btn small">{{ "Switch off" if r.enabled else "Switch on" }}</button></form>
-    <form class="inline" method="post" action="/rules/{{ r.id }}/delete"><button class="btn small danger">Delete</button></form>
-  </td>
-</tr>
-{% else %}
-<tr><td colspan="7" class="empty">No rules. Hold, drop or correct an image from its page, or add one below.</td></tr>
-{% endfor %}
-</table></div></div>
-<div class="card">
-  <h3>Add a rule</h3>
+<div class="card" id="add" hidden>
+  <h3>Add a rule <button type="button" class="btn small" data-close="add">Cancel</button></h3>
   <form method="post" action="/rules">
     <div class="fields">
       <div class="field"><label>Rule id</label><input type="text" name="id" required placeholder="hold-sonoff-plug"></div>
@@ -47,6 +28,25 @@
     <div class="split"><button class="btn primary">Add rule</button></div>
   </form>
 </div>
+<div class="card flush"><div class="tbl"><table>
+<tr><th>Rule</th><th>Action</th><th>Matches</th><th>Sets</th><th>Note</th><th>Added</th><th></th></tr>
+{% for r in rules %}
+<tr>
+  <td class="mono">{{ r.id }}</td>
+  <td>{{ m.action_pill(r.action) }}{% if not r.enabled %} <span class="pill info">Off</span>{% endif %}</td>
+  <td>{% for k, v in r.match | pairs %}<span class="tag"><b>{{ k }}</b>{{ v }}</span>{% endfor %}</td>
+  <td>{% for k, v in r.set | pairs %}<span class="tag long"><b>{{ k }}</b>{{ v }}</span>{% endfor %}</td>
+  <td>{{ r.note }}</td>
+  <td class="muted">{{ r.author }}<br>{{ r.created | when }}</td>
+  <td class="end">
+    <form class="inline" method="post" action="/rules/{{ r.id }}/toggle"><button class="btn small">{{ "Switch off" if r.enabled else "Switch on" }}</button></form>
+    <form class="inline" method="post" action="/rules/{{ r.id }}/delete"><button class="btn small danger">Delete</button></form>
+  </td>
+</tr>
+{% else %}
+<tr><td colspan="7" class="empty">No rules. Hold, drop or correct an image from its page, or add one here.</td></tr>
+{% endfor %}
+</table></div></div>
 <script>
 var action = document.getElementById("action");
 function showSets() { document.getElementById("sets").hidden = action.value !== "set"; }

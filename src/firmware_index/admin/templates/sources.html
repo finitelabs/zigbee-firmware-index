@@ -7,6 +7,25 @@
 {% block content %}
 <div class="head">
   <div><h1>Sources</h1><p>Where a run gets its files. A lower priority wins when two sources list different files for one device. A new entry waits its source's delay before it is published. Changes apply from the next run.</p></div>
+  <div class="actions"><button type="button" class="btn primary" data-open="add">Add a source</button></div>
+</div>
+<div class="card" id="add" hidden>
+  <h3>Add a source <button type="button" class="btn small" data-close="add">Cancel</button></h3>
+  <form method="post" action="/sources">
+    <div class="fields">
+      <div class="field"><label>Name</label><input type="text" name="name" required></div>
+      <div class="field mid"><label>Type {{ m.help("Community index format: give the URL of an index.json, like the community index's. zigpy provider: pick zigpy-ota or a vendor's own feed; zigpy reads it, so there is nothing else to set up.") }}</label><select name="type" id="kind">
+        <option value="index">Community index format</option><option value="zigpy">zigpy provider</option></select></div>
+      <div class="field wide" data-for="index"><label>Index URL</label><input type="url" name="url" placeholder="https://..."></div>
+      <div class="field" data-for="zigpy" hidden><label>Provider</label><select name="provider">{% for k, v in providers.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select></div>
+      <div class="field" data-for="zigpy" hidden><label>Channel {{ m.help(tip_channel) }}</label><select name="channel">{% for c in channels %}<option>{{ c }}</option>{% endfor %}</select></div>
+      <div class="field"><label>Priority {{ m.help(tip_priority) }}</label><input type="number" name="priority" value="10"></div>
+      <div class="field"><label>Delay (days) {{ m.help(tip_delay) }}</label><input type="number" name="delay_days" min="0" value="7"></div>
+      <label class="check"><input type="checkbox" name="enabled" value="1" checked> On</label>
+      <button class="btn primary">Add</button>
+    </div>
+    <p class="hint" data-for="zigpy" hidden>The channel applies to zigpy-ota only.</p>
+  </form>
 </div>
 <div class="cards">
 {% for s in sources %}
@@ -34,24 +53,6 @@
   </form>
 </div>
 {% endfor %}
-</div>
-<div class="card">
-  <h3>Add a source</h3>
-  <form method="post" action="/sources">
-    <div class="fields">
-      <div class="field"><label>Name</label><input type="text" name="name" required></div>
-      <div class="field mid"><label>Type {{ m.help("Community index format: an index.json URL, the format most Zigbee hubs read. zigpy provider: a vendor feed read through zigpy's own code.") }}</label><select name="type" id="kind">
-        <option value="index">Community index format</option><option value="zigpy">zigpy provider</option></select></div>
-      <div class="field wide" data-for="index"><label>Index URL</label><input type="url" name="url" placeholder="https://..."></div>
-      <div class="field" data-for="zigpy" hidden><label>Provider</label><select name="provider">{% for k, v in providers.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select></div>
-      <div class="field" data-for="zigpy" hidden><label>Channel {{ m.help(tip_channel) }}</label><select name="channel">{% for c in channels %}<option>{{ c }}</option>{% endfor %}</select></div>
-      <div class="field"><label>Priority {{ m.help(tip_priority) }}</label><input type="number" name="priority" value="10"></div>
-      <div class="field"><label>Delay (days) {{ m.help(tip_delay) }}</label><input type="number" name="delay_days" min="0" value="7"></div>
-      <label class="check"><input type="checkbox" name="enabled" value="1" checked> On</label>
-      <button class="btn primary">Add</button>
-    </div>
-    <p class="hint" data-for="zigpy" hidden>The channel applies to zigpy-ota only.</p>
-  </form>
 </div>
 <script>
 var kind = document.getElementById("kind");

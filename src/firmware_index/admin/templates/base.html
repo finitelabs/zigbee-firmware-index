@@ -139,5 +139,13 @@ details[open] > summary::before { transform: rotate(90deg); }
 {% if message %}<div class="note">{{ message }}</div>{% endif %}
 {% block content %}{% endblock %}
 </main>
+<script>
+document.querySelectorAll("[data-open]").forEach(function (b) {
+  b.addEventListener("click", function () { var c = document.getElementById(b.dataset.open); c.hidden = false; var f = c.querySelector("input, select"); if (f) f.focus(); });
+});
+document.querySelectorAll("[data-close]").forEach(function (b) {
+  b.addEventListener("click", function () { document.getElementById(b.dataset.close).hidden = true; });
+});
+</script>
 </body>
 </html>
