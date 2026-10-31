@@ -10,7 +10,7 @@
   <form method="post" action="/rules">
     <div class="fields">
       <div class="field"><label>Rule id</label><input type="text" name="id" required placeholder="hold-sonoff-plug"></div>
-      <div class="field"><label>Action {{ m.help("Hold keeps matching files out for now, until the rule is switched off. Drop keeps them out for good. Set corrects their fields.") }}</label><select name="action" id="action">{% for a in actions %}<option value="{{ a }}">{{ a | capitalize }}</option>{% endfor %}</select></div>
+      <div class="field"><label>Action {{ m.help("Hold and Drop both keep matching files out while the rule is on: hold a file you mean to release later, drop one that should never come back. Set corrects their fields.") }}</label><select name="action" id="action">{% for a in actions %}<option value="{{ a }}">{{ a | capitalize }}</option>{% endfor %}</select></div>
       <div class="field wide"><label>Note</label><input type="text" name="note"></div>
     </div>
     <div class="sub">Matches every file that has all of</div>
