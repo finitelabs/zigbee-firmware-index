@@ -13,6 +13,18 @@
 {% for k, v in report.counts.items() %}<div class="stat"><div class="k"{% if tips[k] %} title="{{ tips[k] }}"{% endif %}>{{ k | capitalize }}</div><div class="v">{{ v }}</div></div>{% endfor %}
 </div></div>
 {% endif %}
+{% if changes is not none %}
+<div class="card">
+  <h3><span>Changes</span>
+  <form method="get" action="/runs/{{ run.id }}" class="compare">
+    <label class="count" for="vs">Against</label>
+    <select name="vs" id="vs" onchange="this.form.submit()">
+      {% for c in choices %}<option value="{{ c.id }}"{% if other and c.id == other.id %} selected{% endif %}>Run #{{ c.id }}, {{ c.started | when }}</option>{% endfor %}
+    </select>
+  </form></h3>
+  {{ m.diff_view(changes) }}
+</div>
+{% endif %}
 <div class="card flush"><h3>Sources</h3><div class="tbl"><table>
 <tr><th>Source</th><th>Status</th><th class="num">Entries</th><th>Error</th></tr>
 {% for s in report.sources or [] %}

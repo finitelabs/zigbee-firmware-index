@@ -8,15 +8,8 @@
   <div class="actions"><a class="btn" href="/runs/{{ run.id }}">Cancel</a></div>
 </div>
 <div class="card">
-  <h3>What changes</h3>
-  <div class="stats">
-    <div class="stat"><div class="k">Live now</div><div class="v">{{ live }}</div></div>
-    <div class="stat"><div class="k">After</div><div class="v">{{ count }}</div></div>
-    <div class="stat"><div class="k">Added</div><div class="v">{{ added | length }}</div></div>
-    <div class="stat"><div class="k">Removed</div><div class="v">{{ removed | length }}</div></div>
-  </div>
-  {% if removed %}<details class="split"><summary>Removed <span class="muted">({{ removed | length }})</span></summary><div class="list">{% for e in removed %}<div>{{ e }}</div>{% endfor %}</div></details>{% endif %}
-  {% if added %}<details class="split"><summary>Added <span class="muted">({{ added | length }})</span></summary><div class="list">{% for e in added %}<div>{{ e }}</div>{% endfor %}</div></details>{% endif %}
+  <h3><span>What changes against the live index</span><span class="count">{{ live }} entries now, {{ count }} after</span></h3>
+  {{ m.diff_view(changes) }}
 </div>
 <div class="card">
   <form method="post" action="/runs/{{ run.id }}/publish">
@@ -29,6 +22,6 @@
     <button class="btn primary">Roll back to run #{{ run.id }}'s index</button>
     {% endif %}
   </form>
-  <p class="hint">The next run builds the index again from the sources. To keep a file out after this, hold or drop it.</p>
+  <p class="hint">{% if braked %}The next run builds the index again from the sources. To keep a file out after this, hold or drop it.{% else %}Rolling back switches scheduled runs off, so the next one doesn't build the index again over it. Resume them from the Runs page when you're ready.{% endif %}</p>
 </div>
 {% endblock %}

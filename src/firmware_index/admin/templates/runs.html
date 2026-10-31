@@ -8,6 +8,10 @@
     <form class="inline" method="post" action="/publish"><button class="btn primary">Publish now</button></form>{{ m.help("Runs now instead of waiting for the schedule. If the run would remove more than 5% of the index, the brake keeps the live one; publish that run from its row once you have checked it.") }}
   </div>
 </div>
+{% if paused_for %}
+<div class="note paused"><span>Rolled back to run #{{ paused_for }}'s index. Scheduled runs are off so the next one doesn't build it again over the rollback.</span>
+<form class="inline" method="post" action="/schedule/resume"><button class="btn small">Resume scheduled runs</button></form></div>
+{% endif %}
 <div class="card">
   <h3>Published</h3>
   <div class="stats">

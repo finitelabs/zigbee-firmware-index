@@ -189,7 +189,16 @@ async def runs_page(request: Request) -> Response:
         schedule_on=on,
         schedule_at=at,
         upcoming=upcoming,
+        paused_for=None if on else (dbm.get_setting(db, "paused_for") or None),
     )
+
+
+async def resume_schedule(request: Request) -> Response:
+    db = open_db(request)
+    dbm.set_setting(db, "schedule_on", "1")
+    dbm.set_setting(db, "paused_for", "")
+    dbm.audit(db, request.state.user, "schedule", {"on": True})
+    return back("/", "Scheduled runs are back on")
 
 
 async def save_schedule(request: Request) -> Response:
@@ -201,6 +210,8 @@ async def save_schedule(request: Request) -> Response:
     db = open_db(request)
     dbm.set_setting(db, "schedule_at", at)
     dbm.set_setting(db, "schedule_on", "1" if on else "0")
+    if on:
+        dbm.set_setting(db, "paused_for", "")
     dbm.audit(db, request.state.user, "schedule", {"at": at, "on": on})
     return back("/", f"Runs every day at {at} UTC" if on else "Scheduled runs are off")
 
@@ -210,14 +221,15 @@ def with_actions(db, runs: list[dict]) -> list[dict]:
     can be published, and an earlier published one rolled back to."""
     row = db.execute("SELECT sha512 FROM published WHERE id = 1").fetchone()
     live = row["sha512"] if row else None
-    marked = False
+    seen = set()  # runs come newest first; only the newest of each index offers anything
     for r in runs:
         r["action"] = None
-        if not r.get("result_sha512") or r["status"] not in ("ok", "brake"):
+        sha = r.get("result_sha512")
+        if not sha or r["status"] not in ("ok", "brake") or sha in seen:
             continue
-        if r["result_sha512"] == live:
-            r["action"] = None if marked else "live"
-            marked = True
+        seen.add(sha)
+        if sha == live:
+            r["action"] = "live"
         else:
             r["action"] = "publish" if r["status"] == "brake" else "rollback"
     return runs
@@ -239,7 +251,35 @@ async def run_detail(request: Request) -> Response:
     ).fetchone()
     others = [{**dict(newest), "report": {}}] if newest and newest["id"] != run["id"] else []
     with_actions(db, others + [run])
-    return page(request, "run.html", run=run, report=run["report"])
+    choices = db.execute(
+        "SELECT id, started FROM runs WHERE result_sha512 IS NOT NULL AND id != ?"
+        " ORDER BY id DESC LIMIT 60",
+        (run["id"],),
+    ).fetchall()
+    vs = request.query_params.get("vs")
+    if vs and vs.isdigit():
+        other = db.execute("SELECT * FROM runs WHERE id = ?", (int(vs),)).fetchone()
+    else:
+        other = db.execute(
+            "SELECT * FROM runs WHERE id < ? AND status = 'ok' AND result_sha512 IS NOT NULL"
+            " ORDER BY id DESC LIMIT 1",
+            (run["id"],),
+        ).fetchone()
+    changes = None
+    if run.get("result_sha512") and other and other["result_sha512"]:
+        changes = diff(
+            snapshot_entries(db, other["result_sha512"]),
+            snapshot_entries(db, run["result_sha512"]),
+        )
+    return page(
+        request,
+        "run.html",
+        run=run,
+        report=run["report"],
+        changes=changes,
+        other=dict(other) if other else None,
+        choices=choices,
+    )
 
 
 async def publish_now(request: Request) -> Response:
@@ -251,9 +291,39 @@ async def publish_now(request: Request) -> Response:
     return back("/", "Started a run; refresh to follow it")
 
 
-def describe(e: dict) -> str:
-    model = f" {e['modelId']}" if e.get("modelId") else ""
-    return f"{e['fileName']} ({e['manufacturerCode']:04X}/{e['imageType']:04X}{model})"
+def snapshot_entries(db, sha: str) -> list[dict]:
+    row = db.execute("SELECT entries FROM snapshots WHERE sha512 = ?", (sha,)).fetchone()
+    return json.loads(row["entries"]) if row else []
+
+
+def diff(before: list[dict], after: list[dict]) -> dict:
+    """What changes from one index to the other. An entry listed for the same device whose
+    version moved is updated; the rest are added or removed."""
+    old = {publish.identity(e): e for e in before}
+    new = {publish.identity(e): e for e in after}
+
+    def listing(e):
+        names = tuple(e.get("manufacturerName") or ())
+        return (e["manufacturerCode"], e["imageType"], e.get("modelId"), names)
+
+    came = {}
+    for e in after:
+        if publish.identity(e) not in old:
+            came.setdefault(listing(e), []).append(e)
+    updated, removed = [], []
+    for e in before:
+        if publish.identity(e) in new:
+            continue
+        if came.get(listing(e)):
+            updated.append((e, came[listing(e)].pop(0)))
+        else:
+            removed.append(e)
+    added = [e for group in came.values() for e in group]
+    return {
+        "added": sorted(added, key=publish.sort_key),
+        "updated": sorted(updated, key=lambda pair: publish.sort_key(pair[1])),
+        "removed": sorted(removed, key=publish.sort_key),
+    }
 
 
 async def confirm_publish(request: Request) -> Response:
@@ -264,24 +334,16 @@ async def confirm_publish(request: Request) -> Response:
     with_actions(db, [run])
     if run["action"] not in ("publish", "rollback"):
         return back(f"/runs/{run['id']}", "This run's index is live, or it kept none to publish")
-    kept = db.execute(
-        "SELECT entries FROM snapshots WHERE sha512 = ?", (run["result_sha512"],)
-    ).fetchone()
+    entries = snapshot_entries(db, run["result_sha512"])
     live = db.execute("SELECT entries FROM published WHERE id = 1").fetchone()
-    entries = json.loads(kept["entries"])
     before = json.loads(live["entries"]) if live else []
-    old = {publish.identity(e): e for e in before}
-    new = {publish.identity(e): e for e in entries}
-    added = [describe(new[k]) for k in new.keys() - old.keys()]
-    removed = [describe(old[k]) for k in old.keys() - new.keys()]
     return page(
         request,
         "publish.html",
         run=run,
         count=len(entries),
         live=len(before),
-        added=sorted(added),
-        removed=sorted(removed),
+        changes=diff(before, entries),
     )
 
 
@@ -301,8 +363,12 @@ async def publish_run(request: Request) -> Response:
     except Exception as e:
         return back(f"/runs/{run['id']}", f"Could not publish: {e}")
     dbm.audit(db, request.state.user, run["action"], {"run": run["id"]})
-    done = "Rolled back to" if run["action"] == "rollback" else "Published"
-    return back("/", f"{done} run #{run['id']}'s index")
+    if run["action"] == "rollback":
+        # A rollback is a stop-gap: the next scheduled run would build the index again.
+        dbm.set_setting(db, "schedule_on", "0")
+        dbm.set_setting(db, "paused_for", str(run["id"]))
+        return back("/", f"Rolled back to run #{run['id']}'s index; scheduled runs are off")
+    return back("/", f"Published run #{run['id']}'s index")
 
 
 async def sources_page(request: Request) -> Response:
@@ -787,6 +853,7 @@ def create_app(
             Route("/runs/{id:int}/publish", publish_run, methods=["POST"]),
             Route("/publish", publish_now, methods=["POST"]),
             Route("/schedule", save_schedule, methods=["POST"]),
+            Route("/schedule/resume", resume_schedule, methods=["POST"]),
             Route("/sources", sources_page),
             Route("/sources", add_source, methods=["POST"]),
             Route("/sources/{name}", edit_source, methods=["POST"]),

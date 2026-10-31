@@ -429,3 +429,56 @@ def test_a_rollback_needs_only_its_button_and_the_live_run_offers_none(admin):
     assert admin.runs.republished == [1]
     assert "is+live" in message(admin.post("/runs/2/publish"))
     assert "is+live" in message(admin.get("/runs/2/publish"))
+
+
+def test_a_diff_pairs_a_new_version_of_the_same_listing_as_updated():
+    from firmware_index.admin import diff
+
+    def e(sha, mfr, version, model="M"):
+        return {**entry(sha * 128, mfr, model), "fileVersion": version}
+
+    # One file listed for any model and for model X, as the community index does.
+    g = [e("g", 5, 0x10, model=None), e("g", 5, 0x10, model="X")]
+    h = [e("h", 5, 0x12, model=None), e("h", 5, 0x12, model="X")]
+    before = [e("a", 1, 0x10), e("b", 2, 0x10), e("c", 3, 0x10)] + g
+    after = [e("a", 1, 0x10), e("d", 2, 0x11), e("f", 4, 0x10)] + h
+    changes = diff(before, after)
+    assert [n["fileVersion"] for _, n in changes["updated"]] == [0x11, 0x12, 0x12]
+    assert [x["manufacturerCode"] for x in changes["added"]] == [4]
+    assert [x["manufacturerCode"] for x in changes["removed"]] == [3]
+
+
+def test_a_run_page_shows_its_changes_against_the_run_before_or_any_chosen(admin):
+    seed_runs(admin)
+    page = admin.get("/runs/2").text
+    assert "Changes" in page and "B.ota" in page and "A.ota" in page
+    assert 'value="1" selected' in page
+    chosen = admin.get("/runs/2", params={"vs": "3"}).text
+    assert 'value="3" selected' in chosen and "A.ota" not in chosen.split("Changes")[1]
+
+
+def test_a_rollback_switches_scheduled_runs_off_until_resumed(admin):
+    seed_runs(admin)
+    assert "scheduled+runs+are+off" in message(admin.post("/runs/1/publish"))
+    assert dbm.get_setting(admin.db, "schedule_on") == "0"
+    page = admin.get("/").text
+    assert "Rolled back to run #1" in page and "Resume scheduled runs" in page
+    assert "back+on" in message(admin.post("/schedule/resume"))
+    assert dbm.get_setting(admin.db, "schedule_on") == "1"
+    assert "Resume scheduled runs" not in admin.get("/").text
+
+
+def test_publishing_a_braked_run_leaves_the_schedule_on(admin):
+    seed_runs(admin)
+    admin.post("/runs/3/publish", data={"confirm": "publish"})
+    assert dbm.get_setting(admin.db, "schedule_on", "1") == "1"
+
+
+def test_runs_that_kept_the_same_index_offer_it_once(admin):
+    seed_runs(admin)
+    admin.db.execute(
+        "INSERT INTO runs (id, started, status, report, result_sha512) VALUES (4, 't', 'ok', '{}', ?)",
+        ("a" * 128,),
+    )
+    page = admin.get("/").text
+    assert page.count("Roll back") == 1 and 'href="/runs/4/publish">Roll back' in page

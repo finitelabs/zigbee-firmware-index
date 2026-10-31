@@ -24,6 +24,25 @@
 {%- endif -%}
 {%- endmacro %}
 
+{% macro entry_line(e) -%}
+<span class="name">{{ e.fileName }}</span><span class="muted mono">{{ e.manufacturerCode | hex4 }}/{{ e.imageType | hex4 }}{% if e.modelId %} {{ e.modelId }}{% endif %}</span>
+{%- endmacro %}
+
+{% macro diff_view(changes) -%}
+<div class="stats">
+  <div class="stat"><div class="k">Added</div><div class="v">{{ changes.added | length }}</div></div>
+  <div class="stat"><div class="k" title="Listed for the same device, at another version">Updated</div><div class="v">{{ changes.updated | length }}</div></div>
+  <div class="stat"><div class="k">Removed</div><div class="v">{{ changes.removed | length }}</div></div>
+</div>
+{% if changes.added %}<details class="split"{% if changes.added | length <= 20 %} open{% endif %}><summary>Added <span class="muted">({{ changes.added | length }})</span></summary>
+<div class="list diff">{% for e in changes.added %}<div>{{ entry_line(e) }}<span class="ver">{{ e.fileVersion | hex8 }}</span></div>{% endfor %}</div></details>{% endif %}
+{% if changes.updated %}<details class="split"{% if changes.updated | length <= 20 %} open{% endif %}><summary>Updated <span class="muted">({{ changes.updated | length }})</span></summary>
+<div class="list diff">{% for old, new in changes.updated %}<div>{{ entry_line(new) }}<span class="ver">{{ old.fileVersion | hex8 }} &rarr; {{ new.fileVersion | hex8 }}</span></div>{% endfor %}</div></details>{% endif %}
+{% if changes.removed %}<details class="split"{% if changes.removed | length <= 20 %} open{% endif %}><summary>Removed <span class="muted">({{ changes.removed | length }})</span></summary>
+<div class="list diff">{% for e in changes.removed %}<div>{{ entry_line(e) }}<span class="ver">{{ e.fileVersion | hex8 }}</span></div>{% endfor %}</div></details>{% endif %}
+{% if not (changes.added or changes.updated or changes.removed) %}<p class="hint">The two indexes are the same.</p>{% endif %}
+{%- endmacro %}
+
 {% macro report_lists(report) -%}
 {% if report.failures %}
 <div class="card"><h3>Failed checks <span class="count">{{ report.failures | length }}</span></h3>
