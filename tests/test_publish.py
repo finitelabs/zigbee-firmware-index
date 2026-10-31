@@ -1,3 +1,4 @@
+import asyncio
 import hashlib
 import json
 
@@ -236,6 +237,26 @@ def test_zigpy_sources_download_through_zigpy(world, tmp_path, monkeypatch):
 
     assert [e["modelId"] for e in world.index()] == ["A", "B"]
     assert world.fetcher.calls == []
+
+
+def test_a_download_that_hangs_fails_alone(world, monkeypatch):
+    world.source("community", 3, A)
+    listed = files(world, 2)
+    world.fetcher.serve(A, listed)
+    get = world.fetcher.get
+
+    async def slow(url):
+        if url == listed[0]["url"]:
+            await asyncio.sleep(10)
+        return await get(url)
+
+    monkeypatch.setattr(world.fetcher, "get", slow)
+    monkeypatch.setattr(publish, "DOWNLOAD_TIMEOUT", 0.05)
+
+    report = world.run()
+
+    assert len(world.index()) == 1
+    assert report.failures[0]["reason"].startswith("TimeoutError")
 
 
 def test_uploads_are_published_from_the_volume(world):
