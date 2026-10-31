@@ -6,7 +6,7 @@
   <div><h1>Runs</h1><p>Each run reads the sources, checks every new file, applies the rules and publishes the index.</p></div>
   <div class="actions">
     <form class="inline" method="post" action="/publish"><input type="hidden" name="anyway" value="0"><button class="btn primary">Publish now</button></form>
-    <form class="inline" method="post" action="/publish"><input type="hidden" name="anyway" value="1"><button class="btn">Publish anyway</button></form>{{ m.help("A run that would remove more than 5% of the index stops and keeps the last one (the brake). Publish anyway lets it through, for when the drop is expected.", end=True) }}
+    <form class="inline" method="post" action="/publish"><input type="hidden" name="anyway" value="1"><button class="btn">Publish anyway</button></form>{{ m.help("A run that would remove more than 5% of the index stops and keeps the last one (the brake). Publish anyway lets it through, for when the drop is expected.") }}
   </div>
 </div>
 <div class="card">

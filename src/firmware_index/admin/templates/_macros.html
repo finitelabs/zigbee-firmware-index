@@ -1,5 +1,5 @@
-{% macro help(text, end=False) -%}
-<span class="help{% if end %} end{% endif %}" tabindex="0" role="note" aria-label="{{ text }}" data-tip="{{ text }}">?</span>
+{% macro help(text) -%}
+<span class="help" tabindex="0" role="note" aria-label="{{ text }}" data-tip="{{ text }}">?</span>
 {%- endmacro %}
 
 {% macro run_pill(status) -%}

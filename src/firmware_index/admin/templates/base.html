@@ -15,6 +15,7 @@
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 [hidden] { display: none !important; }
+html, body { overflow-x: hidden; }
 body { font-family: var(--font); background: var(--bg); color: var(--text); font-size: 13px; line-height: 1.5; }
 a { color: var(--accent); text-decoration: none; }
 a:hover { text-decoration: underline; }
@@ -56,9 +57,10 @@ main { max-width: 1180px; margin: 0 auto; padding: 20px; }
 .pill.blue { background: #dbeafe; color: #1e40af; }
 .help { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; margin-left: 4px; border-radius: 50%; border: 1px solid var(--border); background: var(--surface); color: var(--text-muted); font-size: 9px; font-weight: 700; line-height: 1; text-transform: none; letter-spacing: 0; vertical-align: 1px; cursor: help; }
 .help:hover, .help:focus { color: var(--accent); border-color: var(--accent); outline: none; }
-.help::after { content: attr(data-tip); position: absolute; left: -8px; top: calc(100% + 7px); width: max-content; max-width: 280px; padding: 6px 9px; border-radius: 5px; background: #1f2937; color: #fff; font-size: 11.5px; font-weight: 400; line-height: 1.45; white-space: normal; text-align: left; box-shadow: 0 4px 12px rgba(0,0,0,0.15); opacity: 0; pointer-events: none; transition: opacity .12s; z-index: 10; }
-.help.end::after { left: auto; right: -8px; }
-.help:hover::after, .help:focus::after { opacity: 1; }
+.help::after { content: attr(data-tip); position: absolute; left: var(--tip-left, -8px); top: calc(100% + 7px); width: max-content; max-width: var(--tip-max, 280px); padding: 6px 9px; border-radius: 5px; background: #1f2937; color: #fff; font-size: 11.5px; font-weight: 400; line-height: 1.45; white-space: normal; text-align: left; box-shadow: 0 4px 12px rgba(0,0,0,0.15); display: none; pointer-events: none; z-index: 10; }
+.help.up::after { top: auto; bottom: calc(100% + 7px); }
+.tip-probe { position: absolute; left: 0; top: 0; visibility: hidden; width: max-content; padding: 6px 9px; font-size: 11.5px; line-height: 1.45; white-space: normal; }
+.help:hover::after, .help:focus::after { display: block; }
 th[title], .k[title] { text-decoration: underline dotted var(--border); text-underline-offset: 3px; cursor: help; }
 .tag { display: inline-block; font-size: 11px; color: #374151; background: var(--nest); border: 1px solid var(--line); border-radius: 4px; padding: 0 6px; margin: 1px 3px 1px 0; white-space: nowrap; }
 .tag b { font-weight: 500; color: var(--text-muted); margin-right: 4px; }
@@ -159,6 +161,25 @@ details[open] > summary::before { transform: rotate(90deg); }
 <script>
 document.querySelectorAll("[data-open]").forEach(function (b) {
   b.addEventListener("click", function () { var c = document.getElementById(b.dataset.open); c.hidden = false; var f = c.querySelector("input, select"); if (f) f.focus(); });
+});
+// Keep each help tooltip inside the window, wherever the layout puts its icon.
+var probe = document.createElement("span");
+probe.className = "tip-probe";
+document.body.appendChild(probe);
+function placeTip(h) {
+  var vw = document.documentElement.clientWidth;
+  var max = Math.min(280, vw - 24);
+  probe.style.maxWidth = max + "px";
+  probe.textContent = h.dataset.tip;
+  var r = h.getBoundingClientRect();
+  var left = Math.min(Math.max(12, r.left - 8), vw - probe.offsetWidth - 12);
+  h.style.setProperty("--tip-left", (left - r.left) + "px");
+  h.style.setProperty("--tip-max", max + "px");
+  h.classList.toggle("up", r.bottom + 7 + probe.offsetHeight > window.innerHeight - 8 && r.top > probe.offsetHeight + 15);
+}
+document.querySelectorAll(".help").forEach(function (h) {
+  h.addEventListener("mouseenter", function () { placeTip(h); });
+  h.addEventListener("focus", function () { placeTip(h); });
 });
 document.querySelectorAll("[data-close]").forEach(function (b) {
   b.addEventListener("click", function () { document.getElementById(b.dataset.close).hidden = true; });
