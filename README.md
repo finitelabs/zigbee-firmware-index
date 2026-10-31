@@ -141,4 +141,5 @@ A tag `vMAJOR.MINOR.PATCH` builds the image and pushes it to
 
 AGPL-3.0. `src/firmware_index/manufacturers.py` is generated from
 [ZAP](https://github.com/project-chip/zap)'s `manufacturers.xml`, Copyright (c)
-2008,2022 Silicon Labs, under the Apache License, Version 2.0.
+2008,2022 Silicon Labs, under the Apache License, Version 2.0, in
+`LICENSES/Apache-2.0.txt`.
