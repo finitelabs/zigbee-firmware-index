@@ -138,7 +138,7 @@ def run_check(args: argparse.Namespace) -> int:
     from firmware_index import check
 
     async def go():
-        async with aiohttp.ClientSession(timeout=TIMEOUT) as session:
+        async with aiohttp.ClientSession() as session:
             return await check.problems(
                 args.url.rstrip("/"),
                 publish.HttpFetcher(session),
