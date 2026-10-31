@@ -10,7 +10,6 @@
   --border: #d1d5db; --line: #e5e7eb; --text: #1a1a1a; --text-muted: #6b7280;
   --accent: #2563eb; --accent-hover: #1d4ed8; --danger: #dc2626;
   --radius: 6px; --shadow: 0 1px 3px rgba(0,0,0,0.08);
-  /* Two sizes for everything you can press or read at a glance. */
   --h: 32px; --h-sm: 24px; --gap: 16px;
   --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -113,8 +112,6 @@ td.end { text-align: right; white-space: nowrap; }
 .btn.danger:hover { background: #fef2f2; }
 .btn.small { height: var(--h-sm); padding: 0 10px; font-size: 11px; }
 form.inline { display: inline-flex; vertical-align: middle; }
-form.inline + form.inline, .btn + .btn, form.inline + .btn, .btn + form.inline { margin-left: 6px; }
-.actions > * + * { margin-left: 0; }
 
 .fields { display: flex; flex-wrap: wrap; gap: 12px var(--gap); align-items: flex-end; }
 .field { display: flex; flex-direction: column; gap: 4px; flex: 0 1 150px; min-width: 110px; }
