@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "_macros.html" as m %}
 {% block content %}
 {% set e = entries[0] %}
 {% set notes = entries | map(attribute="releaseNotes") | select | unique | list %}
@@ -13,16 +14,16 @@
     <div class="k">Image type</div><div class="v mono">{{ e.imageType | hex4 }}</div>
     <div class="k">File version</div><div class="v mono">{{ e.fileVersion | hex8 }}</div>
     <div class="k">Size</div><div class="v">{{ e.fileSize }} bytes</div>
-    <div class="k">Header</div><div class="v">{{ e.otaHeaderString }}</div>
+    <div class="k" title="The text the vendor put in the file's OTA header">Header</div><div class="v">{{ e.otaHeaderString }}</div>
     <div class="k">First seen</div><div class="v">{{ entries | map(attribute="firstSeen") | min | when }}</div>
-    {% if e.upstreamSha512 %}<div class="k">Cut from</div><div class="v">a larger upstream file, SHA-512 <span class="mono">{{ e.upstreamSha512[:16] }}...</span></div>{% endif %}
-    <div class="k">SHA-512</div><div class="v mono">{{ e.sha512 }}</div>
+    {% if e.upstreamSha512 %}<div class="k" title="The source's file had a vendor wrapper or trailing bytes; we publish only the OTA image inside it">Cut from</div><div class="v">a larger upstream file, SHA-512 <span class="mono">{{ e.upstreamSha512[:16] }}...</span></div>{% endif %}
+    <div class="k" title="The fingerprint of the file we publish. The driver checks every download against it.">SHA-512</div><div class="v mono">{{ e.sha512 }}</div>
   </div>
 </div>
 <div class="card flush">
   <h3>Listed for <span class="count">{{ entries | length }}</span></h3>
   <div class="tbl"><table>
-    <tr><th>Model</th><th>Manufacturer names</th><th>Updates versions</th><th>Hardware</th><th>Sources</th><th>Rules</th><th>From</th></tr>
+    <tr><th title="Only devices reporting this model are offered the file">Model</th><th title="Only devices reporting one of these manufacturer names are offered the file">Manufacturer names</th><th title="Only devices already running a version in this range are offered the file">Updates versions</th><th title="Only devices with a hardware version in this range take the file">Hardware</th><th>Sources</th><th>Rules</th><th title="Where the source got the file">From</th></tr>
     {% for x in entries %}
     <tr>
       <td>{{ x.modelId or "Any" }}</td>

@@ -12,7 +12,7 @@
   </form>
 </div>
 <div class="card flush"><div class="tbl"><table>
-<tr><th>Manufacturer</th><th>Image type</th><th>Version</th><th>Model</th><th>File</th><th class="num">Size</th><th>Sources</th><th></th></tr>
+<tr><th title="The Zigbee manufacturer code in the file's header">Manufacturer</th><th title="The vendor's number for which firmware this is; with the manufacturer code it says which devices take it">Image type</th><th title="The firmware version the file installs">Version</th><th title="The model this entry is listed for; empty means any model with this manufacturer code and image type">Model</th><th>File</th><th class="num">Size</th><th title="Every source that listed this same file">Sources</th><th></th></tr>
 {% for e in entries %}
 <tr>
   <td class="mono">{{ e.manufacturerCode | hex4 }}</td>

@@ -9,7 +9,8 @@
 {% if report.alerts %}<div class="card"><h3>Alerts</h3>{% for a in report.alerts %}<div>{{ a }}</div>{% endfor %}</div>{% endif %}
 {% if report.counts %}
 <div class="card"><h3>Counts</h3><div class="stats">
-{% for k, v in report.counts.items() %}<div class="stat"><div class="k">{{ k | capitalize }}</div><div class="v">{{ v }}</div></div>{% endfor %}
+{% set tips = {"added": "Entries this run published that the one before did not have", "removed": "Entries the run before published that this one did not", "failed": "Files that failed a check: download, checksum or header", "held": "Entries kept out by a hold rule", "dropped": "Entries kept out by a drop rule", "waiting": "New entries waiting out their source's delay", "clashes": "Times two sources listed different files for the same device and version"} %}
+{% for k, v in report.counts.items() %}<div class="stat"><div class="k"{% if tips[k] %} title="{{ tips[k] }}"{% endif %}>{{ k | capitalize }}</div><div class="v">{{ v }}</div></div>{% endfor %}
 </div></div>
 {% endif %}
 <div class="card flush"><h3>Sources</h3><div class="tbl"><table>

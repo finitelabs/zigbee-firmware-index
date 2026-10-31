@@ -6,14 +6,14 @@
   <div><h1>Runs</h1><p>Each run reads the sources, checks every new file, applies the rules and publishes the index.</p></div>
   <div class="actions">
     <form class="inline" method="post" action="/publish"><input type="hidden" name="anyway" value="0"><button class="btn primary">Publish now</button></form>
-    <form class="inline" method="post" action="/publish" title="Publish even if the run would drop more than 5% of the index"><input type="hidden" name="anyway" value="1"><button class="btn">Publish anyway</button></form>
+    <form class="inline" method="post" action="/publish"><input type="hidden" name="anyway" value="1"><button class="btn">Publish anyway</button></form>{{ m.help("A run that would remove more than 5% of the index stops and keeps the last one (the brake). Publish anyway lets it through, for when the drop is expected.", end=True) }}
   </div>
 </div>
 <div class="card">
   <h3>Published</h3>
   <div class="stats">
     <div class="stat"><div class="k">Entries</div><div class="v">{{ last.report.counts.entries if last and last.report.counts else "-" }}</div></div>
-    <div class="stat"><div class="k">Waiting</div><div class="v">{{ last.report.counts.waiting if last and last.report.counts else "-" }}</div></div>
+    <div class="stat"><div class="k">Waiting {{ m.help("New entries from a source with a delay, not yet listed long enough to publish.") }}</div><div class="v">{{ last.report.counts.waiting if last and last.report.counts else "-" }}</div></div>
     <div class="stat"><div class="k">Last run</div><div class="v small">{% if last %}{{ m.run_pill(last.status) }}{% else %}None yet{% endif %}</div></div>
     <div class="stat" title="{{ published.snapshot if published }}"><div class="k">Published</div><div class="v small">{{ published.at | when if published else "Not yet" }}</div></div>
   </div>
@@ -21,7 +21,7 @@
 <div class="card flush">
   <h3>Recent runs</h3>
   <div class="tbl"><table>
-    <tr><th>Run</th><th>Started</th><th>Status</th><th class="num">Entries</th><th class="num">Added</th><th class="num">Removed</th><th class="num">Failed</th><th class="num">Held</th><th class="num">Waiting</th><th>Alerts</th></tr>
+    <tr><th>Run</th><th>Started</th><th>Status</th><th class="num">Entries</th><th class="num" title="Entries this run published that the one before did not have">Added</th><th class="num" title="Entries the run before published that this one did not">Removed</th><th class="num" title="Files that failed a check: download, checksum or header">Failed</th><th class="num" title="Entries kept out by a hold rule">Held</th><th class="num" title="New entries waiting out their source's delay">Waiting</th><th>Alerts</th></tr>
     {% for r in runs %}{% set c = r.report.counts or {} %}
     <tr>
       <td><a href="/runs/{{ r.id }}">#{{ r.id }}</a></td>

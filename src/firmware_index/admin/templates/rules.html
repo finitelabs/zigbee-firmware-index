@@ -29,7 +29,7 @@
   <form method="post" action="/rules">
     <div class="fields">
       <div class="field"><label>Rule id</label><input type="text" name="id" required placeholder="hold-sonoff-plug"></div>
-      <div class="field"><label>Action</label><select name="action" id="action">{% for a in actions %}<option value="{{ a }}">{{ a | capitalize }}</option>{% endfor %}</select></div>
+      <div class="field"><label>Action {{ m.help("Hold keeps matching files out for now, until the rule is switched off. Drop keeps them out for good. Set corrects their fields.") }}</label><select name="action" id="action">{% for a in actions %}<option value="{{ a }}">{{ a | capitalize }}</option>{% endfor %}</select></div>
       <div class="field wide"><label>Note</label><input type="text" name="note"></div>
     </div>
     <div class="sub">Matches every file that has all of</div>
@@ -37,11 +37,11 @@
       <div class="field"><label>Source</label><select name="m_source"><option value="">Any</option>{% for s in sources %}<option>{{ s }}</option>{% endfor %}</select></div>
       <div class="field"><label>Manufacturer code</label><input type="text" name="m_manufacturerCode" placeholder="0x..."></div>
       <div class="field"><label>Image type</label><input type="text" name="m_imageType" placeholder="0x..."></div>
-      <div class="field"><label>Version from</label><input type="text" name="m_versionMin" placeholder="0x..."></div>
+      <div class="field"><label>Version from {{ m.help("Matches files whose version is in this range. Give the same number in both for one exact version.") }}</label><input type="text" name="m_versionMin" placeholder="0x..."></div>
       <div class="field"><label>Version to</label><input type="text" name="m_versionMax" placeholder="0x..."></div>
       <div class="field"><label>Model</label><input type="text" name="m_modelId"></div>
-      <div class="field wide"><label>URL pattern</label><input type="text" name="m_url" placeholder="*/Vendor/*"></div>
-      <div class="field full"><label>SHA-512</label><input type="text" name="m_sha512" placeholder="One file, by its SHA-512 or its upstream one"></div>
+      <div class="field wide"><label>URL pattern {{ m.help("Matches the address the file came from. * stands for anything, as in */ThirdReality/*.") }}</label><input type="text" name="m_url" placeholder="*/Vendor/*"></div>
+      <div class="field full"><label>SHA-512 {{ m.help("One exact file, by the fingerprint shown on its image page or by its source's own.") }}</label><input type="text" name="m_sha512" placeholder="One file, by its SHA-512 or its upstream one"></div>
     </div>
     <div id="sets" hidden><div class="sub">Sets</div>{% include "_set_fields.html" %}</div>
     <div class="split"><button class="btn primary">Add rule</button></div>

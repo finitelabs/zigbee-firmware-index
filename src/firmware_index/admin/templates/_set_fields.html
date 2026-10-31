@@ -1,9 +1,10 @@
+{% import "_macros.html" as m %}
 <div class="fields">
   <div class="field"><label>Model</label><input type="text" name="s_modelId"></div>
   <div class="field wide"><label>Manufacturer names</label><input type="text" name="s_manufacturerName" placeholder="Comma-separated"></div>
-  <div class="field"><label>From version</label><input type="text" name="s_minFileVersion" placeholder="0x..."></div>
-  <div class="field"><label>Up to version</label><input type="text" name="s_maxFileVersion" placeholder="0x..."></div>
-  <div class="field"><label>Lowest hardware</label><input type="text" name="s_hardwareVersionMin"></div>
+  <div class="field"><label>From version {{ m.help("Offer this file only to devices already running this version or newer.") }}</label><input type="text" name="s_minFileVersion" placeholder="0x..."></div>
+  <div class="field"><label>Up to version {{ m.help("Offer this file only to devices running this version or older.") }}</label><input type="text" name="s_maxFileVersion" placeholder="0x..."></div>
+  <div class="field"><label>Lowest hardware {{ m.help("Offer this file only to devices whose hardware version is at least this.") }}</label><input type="text" name="s_hardwareVersionMin"></div>
   <div class="field"><label>Highest hardware</label><input type="text" name="s_hardwareVersionMax"></div>
   <div class="field wide"><label>Header string</label><input type="text" name="s_otaHeaderString"></div>
   <div class="field full"><label>Release notes</label><textarea name="s_releaseNotes"></textarea></div>

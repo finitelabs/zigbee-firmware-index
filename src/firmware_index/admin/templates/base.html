@@ -53,6 +53,12 @@ main { max-width: 1180px; margin: 0 auto; padding: 20px; }
 .pill.offline { background: #fee2e2; color: #b91c1c; }
 .pill.info { background: #f1f5f9; color: #475569; }
 .pill.blue { background: #dbeafe; color: #1e40af; }
+.help { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; margin-left: 4px; border-radius: 50%; border: 1px solid var(--border); background: var(--surface); color: var(--text-muted); font-size: 9px; font-weight: 700; line-height: 1; text-transform: none; letter-spacing: 0; vertical-align: 1px; cursor: help; }
+.help:hover, .help:focus { color: var(--accent); border-color: var(--accent); outline: none; }
+.help::after { content: attr(data-tip); position: absolute; left: -8px; top: calc(100% + 7px); width: max-content; max-width: 280px; padding: 6px 9px; border-radius: 5px; background: #1f2937; color: #fff; font-size: 11.5px; font-weight: 400; line-height: 1.45; white-space: normal; text-align: left; box-shadow: 0 4px 12px rgba(0,0,0,0.15); opacity: 0; pointer-events: none; transition: opacity .12s; z-index: 10; }
+.help.end::after { left: auto; right: -8px; }
+.help:hover::after, .help:focus::after { opacity: 1; }
+th[title], .k[title] { text-decoration: underline dotted var(--border); text-underline-offset: 3px; cursor: help; }
 .tag { display: inline-block; font-size: 11px; color: #374151; background: var(--nest); border: 1px solid var(--line); border-radius: 4px; padding: 0 6px; margin: 1px 3px 1px 0; white-space: nowrap; }
 .tag b { font-weight: 500; color: var(--text-muted); margin-right: 4px; }
 .tag.long { white-space: normal; overflow-wrap: anywhere; }

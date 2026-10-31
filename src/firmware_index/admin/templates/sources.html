@@ -1,4 +1,9 @@
 {% extends "base.html" %}
+{% import "_macros.html" as m %}
+{% set kinds = {"index": "community index format", "zigpy": "zigpy provider", "upload": "our uploads"} %}
+{% set tip_priority = "When two sources list different files for the same device and version, the lower number wins." %}
+{% set tip_delay = "A new entry from this source waits this many days before it is published, so a file the vendor pulls soon after release never goes out." %}
+{% set tip_channel = "zigpy-ota's release channel. Stable files are reviewed; beta and dev get files sooner." %}
 {% block content %}
 <div class="head">
   <div><h1>Sources</h1><p>Where a run gets its files. A lower priority wins when two sources list different files for one device. A new entry waits its source's delay before it is published. Changes apply from the next run.</p></div>
@@ -6,11 +11,11 @@
 <div class="cards">
 {% for s in sources %}
 <div class="card">
-  <h3><span>{{ s.name }} <span class="count">{{ {"index": "community index format", "zigpy": "zigpy provider", "upload": "our uploads"}[s.type] }}</span></span>
+  <h3><span>{{ s.name }} <span class="count">{{ kinds[s.type] }}</span></span>
   {% if not s.enabled %}<span class="pill info">Off</span>{% elif s.last_error %}<span class="pill offline">Failing</span>{% elif s.last_ok %}<span class="pill online">OK</span>{% else %}<span class="pill info">Not read yet</span>{% endif %}</h3>
   <div class="about">
     <div class="k">Last good read</div><div class="v">{{ s.last_ok | when or "Never" }}</div>
-    <div class="k">Entries</div><div class="v">{{ s.candidates }}</div>
+    <div class="k" title="What this source listed at its last good read. A failing source keeps this list.">Entries</div><div class="v">{{ s.candidates }}</div>
     {% if s.last_error %}<div class="k">Error</div><div class="v">{{ s.last_error }}</div>{% endif %}
   </div>
   <form method="post" action="/sources/{{ s.name }}" class="split">
@@ -21,7 +26,7 @@
       {% if s.type == "index" %}<div class="field full"><label>URL</label><input type="url" name="url" value="{{ s.config.url }}"></div>{% endif %}
       {% if s.type == "zigpy" %}
       <div class="field"><label>Provider</label><select name="provider">{% for k, v in providers.items() %}<option value="{{ k }}"{% if k == s.config.provider %} selected{% endif %}>{{ v }}</option>{% endfor %}</select></div>
-      {% if s.config.provider == "zigpy_ota" %}<div class="field"><label>Channel</label><select name="channel">{% for c in channels %}<option{% if c == s.config.channel %} selected{% endif %}>{{ c }}</option>{% endfor %}</select></div>{% endif %}
+      {% if s.config.provider == "zigpy_ota" %}<div class="field"><label>Channel {{ m.help(tip_channel) }}</label><select name="channel">{% for c in channels %}<option{% if c == s.config.channel %} selected{% endif %}>{{ c }}</option>{% endfor %}</select></div>{% endif %}
       {% endif %}
       <label class="check"><input type="checkbox" name="enabled" value="1"{% if s.enabled %} checked{% endif %}> On</label>
       <button class="btn">Save</button>
@@ -35,13 +40,13 @@
   <form method="post" action="/sources">
     <div class="fields">
       <div class="field"><label>Name</label><input type="text" name="name" required></div>
-      <div class="field mid"><label>Type</label><select name="type" id="kind">
+      <div class="field mid"><label>Type {{ m.help("Community index format: an index.json URL, the format most Zigbee hubs read. zigpy provider: a vendor feed read through zigpy's own code.") }}</label><select name="type" id="kind">
         <option value="index">Community index format</option><option value="zigpy">zigpy provider</option></select></div>
       <div class="field wide" data-for="index"><label>Index URL</label><input type="url" name="url" placeholder="https://..."></div>
       <div class="field" data-for="zigpy" hidden><label>Provider</label><select name="provider">{% for k, v in providers.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select></div>
-      <div class="field" data-for="zigpy" hidden><label>Channel</label><select name="channel">{% for c in channels %}<option>{{ c }}</option>{% endfor %}</select></div>
-      <div class="field"><label>Priority</label><input type="number" name="priority" value="10"></div>
-      <div class="field"><label>Delay (days)</label><input type="number" name="delay_days" min="0" value="7"></div>
+      <div class="field" data-for="zigpy" hidden><label>Channel {{ m.help(tip_channel) }}</label><select name="channel">{% for c in channels %}<option>{{ c }}</option>{% endfor %}</select></div>
+      <div class="field"><label>Priority {{ m.help(tip_priority) }}</label><input type="number" name="priority" value="10"></div>
+      <div class="field"><label>Delay (days) {{ m.help(tip_delay) }}</label><input type="number" name="delay_days" min="0" value="7"></div>
       <label class="check"><input type="checkbox" name="enabled" value="1" checked> On</label>
       <button class="btn primary">Add</button>
     </div>

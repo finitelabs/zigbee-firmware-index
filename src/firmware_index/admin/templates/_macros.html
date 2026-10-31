@@ -1,7 +1,11 @@
+{% macro help(text, end=False) -%}
+<span class="help{% if end %} end{% endif %}" tabindex="0" role="note" aria-label="{{ text }}" data-tip="{{ text }}">?</span>
+{%- endmacro %}
+
 {% macro run_pill(status) -%}
 {%- if status == "ok" -%}<span class="pill online">OK</span>
-{%- elif status == "brake" -%}<span class="pill pending">Brake</span>
-{%- elif status == "failed" -%}<span class="pill offline">Failed</span>
+{%- elif status == "brake" -%}<span class="pill pending" title="This run would have removed more than 5% of the index, so the last index stayed. Publish anyway lets it through.">Brake</span>
+{%- elif status == "failed" -%}<span class="pill offline" title="The run stopped before publishing; its page has the alert.">Failed</span>
 {%- else -%}<span class="pill blue">Running</span>
 {%- endif -%}
 {%- endmacro %}
@@ -21,7 +25,7 @@
 </table></div></div>
 {% endif %}
 {% if report.clashes %}
-<div class="card"><h3>Clashes <span class="count">{{ report.clashes | length }}</span></h3>
+<div class="card"><h3><span>Clashes {{ help("Two sources listed different files for the same device and version. The source with the lower priority number won.") }}</span><span class="count">{{ report.clashes | length }}</span></h3>
 <div class="tbl"><table><tr><th>Entry</th><th>Kept</th><th>Over</th></tr>
 {% for c in report.clashes %}<tr><td class="mono">{{ c.entry }}</td><td class="mono">{{ c.kept }}</td><td class="mono">{{ c.over | join(", ") }}</td></tr>{% endfor %}
 </table></div></div>
