@@ -27,5 +27,6 @@ async def post(webhook: str | None, report) -> None:
         async with aiohttp.ClientSession() as session:
             async with session.post(webhook, json={"content": text}, raise_for_status=True):
                 pass
-    except aiohttp.ClientError as e:
+    except (aiohttp.ClientError, TimeoutError) as e:
+        # aiohttp's total timeout raises TimeoutError, which is not a ClientError.
         LOG.error("could not post to Discord: %s", e)

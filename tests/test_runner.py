@@ -108,3 +108,39 @@ def test_a_finished_scheduled_run_marks_its_day(runs):
     asyncio.run(go())
     db = dbm.connect(runs.path)
     assert dbm.get_setting(db, "schedule_last") == "2026-10-31"
+
+
+def test_a_discord_post_that_times_out_still_marks_the_day(tmp_path, monkeypatch):
+    from firmware_index import notify, publish
+
+    async def fake_run(db, settings, fetcher, uploads):
+        report = publish.Report(started="2026-10-31T04:01:00Z")
+        report.alerts.append("source x failed")
+        return report
+
+    class Hangs:
+        def __init__(self, *a, **k):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        def post(self, *a, **k):
+            raise TimeoutError()
+
+    monkeypatch.setattr(publish, "run", fake_run)
+    monkeypatch.setattr(notify.aiohttp, "ClientSession", Hangs)
+    dbm.connect(tmp_path / "index.sqlite3").close()
+    r = runner.Runner(tmp_path, lambda anyway: None, "https://discord.test/hook")
+
+    async def go():
+        assert await r.tick(at(4, 1))
+        await r.task
+        assert not await r.tick(at(4, 2))
+
+    asyncio.run(go())
+    db = dbm.connect(tmp_path / "index.sqlite3")
+    assert dbm.get_setting(db, "schedule_last") == "2026-10-31"
