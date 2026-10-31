@@ -1,26 +1,60 @@
 {% extends "base.html" %}
+{% import "_macros.html" as m %}
 {% block content %}
-<h1>Image <code>{{ sha[:16] }}</code></h1>
-{% for e in entries %}<pre class="wide">{{ e | tojson(indent=2) }}</pre>{% endfor %}
-<p>Each action adds a rule matching this file's sha512. It applies from the next run.</p>
-<form method="post" action="/images/{{ sha }}/rule">
-<input type="hidden" name="action" value="hold">
-<label>Note <input type="text" name="note" size="50"></label>
-<button>Hold</button>
-</form>
-<form method="post" action="/images/{{ sha }}/rule">
-<input type="hidden" name="action" value="drop">
-<label>Note <input type="text" name="note" size="50"></label>
-<button>Drop</button>
-</form>
-<fieldset>
-<legend>Set fields</legend>
-<form method="post" action="/images/{{ sha }}/rule">
-<input type="hidden" name="action" value="set">
-{% for name in settable %}<p><label>{{ name }} <input type="text" name="{{ name }}"></label></p>{% endfor %}
-<p class="muted">Numbers may be decimal or 0x hex. manufacturerName takes a comma-separated list.</p>
-<label>Note <input type="text" name="note" size="50"></label>
-<button>Add set rule</button>
-</form>
-</fieldset>
+{% set e = entries[0] %}
+{% set notes = entries | map(attribute="releaseNotes") | select | unique | list %}
+<div class="head">
+  <div><h1>{{ e.fileName }}</h1><p>{{ e.manufacturerCode | hex4 }} / {{ e.imageType | hex4 }}, version {{ e.fileVersion | hex8 }}</p></div>
+  <div class="actions"><a class="btn" href="/images">All images</a><a class="btn" href="{{ e.url }}">Download</a></div>
+</div>
+<div class="card">
+  <h3>File</h3>
+  <div class="about">
+    <div class="k">Manufacturer code</div><div class="v mono">{{ e.manufacturerCode | hex4 }}</div>
+    <div class="k">Image type</div><div class="v mono">{{ e.imageType | hex4 }}</div>
+    <div class="k">File version</div><div class="v mono">{{ e.fileVersion | hex8 }}</div>
+    <div class="k">Size</div><div class="v">{{ e.fileSize }} bytes</div>
+    <div class="k" title="The text the vendor put in the file's OTA header">Header</div><div class="v">{{ e.otaHeaderString }}</div>
+    <div class="k">First seen</div><div class="v">{{ entries | map(attribute="firstSeen") | min | when }}</div>
+    {% if e.upstreamSha512 %}<div class="k" title="The source's file had a vendor wrapper or trailing bytes; we publish only the OTA image inside it">Cut from</div><div class="v">a larger upstream file, SHA-512 <span class="mono">{{ e.upstreamSha512[:16] }}...</span></div>{% endif %}
+    <div class="k" title="The fingerprint of the file we publish. The driver checks every download against it.">SHA-512</div><div class="v mono">{{ e.sha512 }}</div>
+  </div>
+</div>
+<div class="card flush">
+  <h3>Listed for <span class="count">{{ entries | length }}</span></h3>
+  <div class="tbl"><table>
+    <tr><th title="Only devices reporting this model are offered the file">Model</th><th title="Only devices reporting one of these manufacturer names are offered the file">Manufacturer names</th><th title="Only devices already running a version in this range are offered the file">Updates versions</th><th title="Only devices with a hardware version in this range take the file">Hardware</th><th>Sources</th><th>Rules</th><th title="Where the source got the file">From</th></tr>
+    {% for x in entries %}
+    <tr>
+      <td>{{ x.modelId or "Any" }}</td>
+      <td>{{ (x.manufacturerName or ["Any"]) | join(", ") }}</td>
+      <td class="mono">{% if x.minFileVersion is defined or x.maxFileVersion is defined %}{{ x.minFileVersion | hex8 or "any" }} to {{ x.maxFileVersion | hex8 or "any" }}{% else %}<span class="muted">Any</span>{% endif %}</td>
+      <td>{% if x.hardwareVersionMin is defined or x.hardwareVersionMax is defined %}{{ x.hardwareVersionMin if x.hardwareVersionMin is defined else "any" }} to {{ x.hardwareVersionMax if x.hardwareVersionMax is defined else "any" }}{% else %}<span class="muted">Any</span>{% endif %}</td>
+      <td>{% for s in x.sources %}<span class="tag">{{ s }}</span>{% endfor %}</td>
+      <td>{% for r in x.rules or [] %}<span class="tag">{{ r }}</span>{% endfor %}</td>
+      <td>{% if x.originalUrl %}<a href="{{ x.originalUrl }}" title="{{ x.originalUrl }}">{{ x.originalUrl.split("/")[2] }}</a>{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </table></div>
+</div>
+{% if notes %}<div class="card"><h3>Release notes</h3>{% for n in notes %}<p{% if not loop.first %} class="split"{% endif %}>{{ n }}</p>{% endfor %}</div>{% endif %}
+<div class="card">
+  <h3>Hold or drop</h3>
+  <form method="post" action="/images/{{ sha }}/rule">
+    <div class="fields">
+      <div class="field wide"><label>Note</label><input type="text" name="note" placeholder="Why, for the rule list"></div>
+      <button class="btn" name="action" value="hold">Hold</button>
+      <button class="btn danger" name="action" value="drop">Drop</button>
+    </div>
+    <p class="hint">Hold and Drop both keep it out of the index while the rule is on: hold a file you mean to release later, drop one that should never come back. Either adds a rule for this file, applied from the next run.</p>
+  </form>
+</div>
+<div class="card">
+  <h3>Correct its fields</h3>
+  <form method="post" action="/images/{{ sha }}/rule">
+    <input type="hidden" name="action" value="set">
+    {% include "_set_fields.html" %}
+    <div class="fields split"><div class="field wide"><label>Note</label><input type="text" name="note"></div><button class="btn primary">Add rule</button></div>
+  </form>
+</div>
 {% endblock %}

@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m %}
+{% block content %}
+<div class="head">
+  <div><h1>Not in the published index</h1><p>The file <span class="mono">{{ sha[:16] }}...</span> is not in the index the last run published.</p></div>
+  <div class="actions"><a class="btn" href="/images">All images</a></div>
+</div>
+{% if rules %}
+<div class="card flush"><h3>Rules keeping it out</h3><div class="tbl"><table>
+<tr><th>Rule</th><th>Action</th><th>Note</th><th></th></tr>
+{% for r in rules %}
+<tr>
+  <td class="mono">{{ r.id }}</td>
+  <td>{{ m.action_pill(r.action) }}{% if not r.enabled %} <span class="pill info">Off</span>{% endif %}</td>
+  <td>{{ r.note }}</td>
+  <td class="end"><form class="inline" method="post" action="/rules/{{ r.id }}/toggle"><button class="btn small">{{ "Switch off" if r.enabled else "Switch on" }}</button></form></td>
+</tr>
+{% endfor %}
+</table></div></div>
+<p class="hint">Switching a rule off brings the file back on the next run.</p>
+{% else %}
+<div class="card"><p>No rule names this file by its SHA-512. A rule on its URL, manufacturer code, image type or versions may still hold or drop it; the Rules page lists them all. Otherwise a source stopped listing it, or its last check failed; the latest run's page says which.</p></div>
+{% endif %}
+{% endblock %}

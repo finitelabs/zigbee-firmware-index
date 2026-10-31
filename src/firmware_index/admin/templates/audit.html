@@ -1,14 +1,17 @@
 {% extends "base.html" %}
 {% block content %}
-<h1>Audit</h1>
-<div class="wide">
-<table>
-<tr><th>When</th><th>Who</th><th>Action</th><th>Detail</th></tr>
+<div class="head"><div><h1>Audit</h1><p>Every change made on these pages, newest first.</p></div></div>
+<div class="card flush"><div class="tbl"><table>
+<tr><th>When</th><th>Who</th><th>What</th><th>Detail</th></tr>
 {% for r in rows %}
-<tr><td>{{ r.at }}</td><td>{{ r.who }}</td><td>{{ r.action }}</td><td class="mono">{{ r.detail }}</td></tr>
+<tr>
+  <td class="muted nowrap">{{ r.at | when }}</td>
+  <td>{{ r.who }}</td>
+  <td><span class="tag">{{ r.action }}</span></td>
+  <td>{% for k, v in r.detail | pairs %}<span class="tag long"><b>{{ k }}</b>{{ v }}</span>{% endfor %}</td>
+</tr>
 {% else %}
-<tr><td colspan="4" class="muted">Nothing yet.</td></tr>
+<tr><td colspan="4" class="empty">Nothing yet.</td></tr>
 {% endfor %}
-</table>
-</div>
+</table></div></div>
 {% endblock %}

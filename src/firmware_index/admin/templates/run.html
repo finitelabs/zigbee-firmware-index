@@ -1,19 +1,23 @@
 {% extends "base.html" %}
+{% import "_macros.html" as m %}
 {% block content %}
-<h1>Run {{ run.id }}</h1>
-<p>Started {{ run.started }}, finished {{ run.finished or "not yet" }}: <strong>{{ run.status or "running" }}</strong>{% if run.anyway %}, published anyway{% endif %}.
-{% if report.snapshot %}Snapshot <code>{{ report.snapshot }}</code>{% if report.changed %} (new){% else %} (unchanged){% endif %}.{% endif %}</p>
-{% if report.alerts %}<h2>Alerts</h2><ul>{% for a in report.alerts %}<li>{{ a }}</li>{% endfor %}</ul>{% endif %}
-{% if report.counts %}<h2>Counts</h2><p>{% for k, v in report.counts.items() %}{{ k }} {{ v }}{% if not loop.last %}, {% endif %}{% endfor %}</p>{% endif %}
-<h2>Sources</h2>
-<table><tr><th>Source</th><th>Status</th><th>Entries</th><th>Error</th></tr>
-{% for s in report.sources or [] %}<tr><td>{{ s.name }}</td><td>{{ s.status }}</td><td>{{ s.count }}</td><td>{{ s.error or "" }}</td></tr>{% endfor %}
-</table>
-{% if report.failures %}<h2>Failed checks</h2><table><tr><th>Entry</th><th>Reason</th></tr>
-{% for f in report.failures %}<tr><td class="mono">{{ f.entry }}</td><td>{{ f.reason }}</td></tr>{% endfor %}</table>{% endif %}
-{% if report.clashes %}<h2>Clashes</h2><table><tr><th>Entry</th><th>Kept</th><th>Over</th></tr>
-{% for c in report.clashes %}<tr><td class="mono">{{ c.entry }}</td><td class="mono">{{ c.kept }}</td><td class="mono">{{ c.over | join(", ") }}</td></tr>{% endfor %}</table>{% endif %}
-{% for title, items in [("Held", report.held), ("Dropped", report.dropped), ("Waiting", report.waiting)] %}
-{% if items %}<h2>{{ title }} ({{ items | length }})</h2><ul class="mono">{% for i in items[:200] %}<li>{{ i }}</li>{% endfor %}</ul>{% endif %}
+<div class="head">
+  <div><h1>Run #{{ run.id }} {{ m.run_pill(run.status) }}{% if run.anyway %} <span class="tag">published anyway</span>{% endif %}</h1>
+  <p>Started {{ run.started | when }}{% if run.finished %}, finished {{ run.finished | when }}{% endif %}.{% if report.snapshot %} Snapshot <code>{{ report.snapshot.split("/")[-1] }}</code>, {{ "new" if report.changed else "unchanged" }}.{% endif %}</p></div>
+  <div class="actions"><a class="btn" href="/">All runs</a></div>
+</div>
+{% if report.alerts %}<div class="card"><h3>Alerts</h3>{% for a in report.alerts %}<div>{{ a }}</div>{% endfor %}</div>{% endif %}
+{% if report.counts %}
+<div class="card"><h3>Counts</h3><div class="stats">
+{% set tips = {"added": "Entries this run published that the one before did not have", "removed": "Entries the run before published that this one did not", "failed": "Files that failed a check: download, checksum or header", "held": "Entries kept out by a hold rule", "dropped": "Entries kept out by a drop rule", "waiting": "New entries waiting out their source's delay", "clashes": "Times two sources listed different files for the same device and version"} %}
+{% for k, v in report.counts.items() %}<div class="stat"><div class="k"{% if tips[k] %} title="{{ tips[k] }}"{% endif %}>{{ k | capitalize }}</div><div class="v">{{ v }}</div></div>{% endfor %}
+</div></div>
+{% endif %}
+<div class="card flush"><h3>Sources</h3><div class="tbl"><table>
+<tr><th>Source</th><th>Status</th><th class="num">Entries</th><th>Error</th></tr>
+{% for s in report.sources or [] %}
+<tr><td>{{ s.name }}</td><td>{% if s.status == "ok" %}<span class="pill online">OK</span>{% else %}<span class="pill offline">Failed, kept its last list</span>{% endif %}</td><td class="num">{{ s.count }}</td><td class="muted">{{ s.error or "" }}</td></tr>
 {% endfor %}
+</table></div></div>
+{{ m.report_lists(report) }}
 {% endblock %}

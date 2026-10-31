@@ -1,25 +1,36 @@
 {% extends "base.html" %}
 {% block content %}
-<h1>Check an upload</h1>
-<table>
-<tr><th>Manufacturer</th><td class="mono">{{ image.manufacturer | hex4 }}</td></tr>
-<tr><th>Image type</th><td class="mono">{{ image.image_type | hex4 }}</td></tr>
-<tr><th>File version</th><td class="mono">{{ image.version | hex8 }}</td></tr>
-<tr><th>Header string</th><td>{{ image.header_string }}</td></tr>
-<tr><th>Size</th><td>{{ size }} bytes{% if trimmed %} (cut to the OTA image){% endif %}</td></tr>
-<tr><th>SHA-512</th><td class="mono">{{ sha }}</td></tr>
-</table>
-<form method="post" action="/uploads/save">
-<input type="hidden" name="sha512" value="{{ sha }}">
-<p><label>File name <input type="text" name="file_name" value="{{ file_name }}" size="50"></label></p>
-<p><label>Model <input type="text" name="model_id"></label></p>
-<p><label>Manufacturer names <input type="text" name="manufacturer_names" size="50" placeholder="comma-separated"></label></p>
-<p><label>Lowest file version it updates <input type="text" name="min_file_version"></label>
-<label>Highest <input type="text" name="max_file_version"></label></p>
-<p><label>Lowest hardware version <input type="text" name="hardware_min"></label>
-<label>Highest <input type="text" name="hardware_max"></label></p>
-<p><label>Release notes<textarea name="release_notes"></textarea></label></p>
-<p><label>Where it came from <input type="url" name="original_url" value="{{ url }}" size="60"></label></p>
-<button>Save</button> <a href="/uploads">Cancel</a>
-</form>
+<div class="head">
+  <div><h1>Check an upload</h1><p>The file has an OTA header{% if trimmed %} and was cut to its OTA image{% endif %}. Add what the header can't say, then save.</p></div>
+  <div class="actions"><a class="btn" href="/uploads">Cancel</a></div>
+</div>
+<div class="card">
+  <h3>What the header says</h3>
+  <div class="about">
+    <div class="k">Manufacturer code</div><div class="v mono">{{ image.manufacturer | hex4 }}</div>
+    <div class="k">Image type</div><div class="v mono">{{ image.image_type | hex4 }}</div>
+    <div class="k">File version</div><div class="v mono">{{ image.version | hex8 }}</div>
+    <div class="k">Header string</div><div class="v">{{ image.header_string }}</div>
+    <div class="k">Size</div><div class="v">{{ size }} bytes</div>
+    <div class="k">SHA-512</div><div class="v mono">{{ sha }}</div>
+  </div>
+</div>
+<div class="card">
+  <h3>Details</h3>
+  <form method="post" action="/uploads/save">
+    <input type="hidden" name="sha512" value="{{ sha }}">
+    <div class="fields">
+      <div class="field wide"><label>File name</label><input type="text" name="file_name" value="{{ file_name }}"></div>
+      <div class="field"><label>Model</label><input type="text" name="model_id"></div>
+      <div class="field wide"><label>Manufacturer names</label><input type="text" name="manufacturer_names" placeholder="Comma-separated"></div>
+      <div class="field"><label>From version</label><input type="text" name="min_file_version" placeholder="0x..."></div>
+      <div class="field"><label>Up to version</label><input type="text" name="max_file_version" placeholder="0x..."></div>
+      <div class="field"><label>Lowest hardware</label><input type="text" name="hardware_min"></div>
+      <div class="field"><label>Highest hardware</label><input type="text" name="hardware_max"></div>
+      <div class="field full"><label>Where it came from</label><input type="url" name="original_url" value="{{ url }}"></div>
+      <div class="field full"><label>Release notes</label><textarea name="release_notes"></textarea></div>
+    </div>
+    <div class="split"><button class="btn primary">Save</button></div>
+  </form>
+</div>
 {% endblock %}
