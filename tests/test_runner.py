@@ -184,6 +184,41 @@ def test_a_scheduled_run_the_lock_refused_leaves_its_day_open(runs, monkeypatch)
     asyncio.run(go())
 
 
+def test_no_run_starts_while_another_holds_the_lock(runs):
+    db = dbm.connect(runs.path)
+    assert dbm.take_lock(db, "cli", at(4))
+    db.close()
+
+    async def go():
+        for minute in range(1, 6):
+            assert not await runs.tick(at(4, minute))
+        assert await runs.tick(at(10, 1))
+        await runs.task
+
+    asyncio.run(go())
+    assert runs.started == [{"anyway": False}]
+
+
+def test_a_rollback_pauses_scheduled_runs_from_inside_its_task(runs, monkeypatch):
+    results = iter([publish.OK, publish.FAILED, publish.OK])
+
+    async def republish(db, settings, run_id):
+        return publish.Report(started="t", status=next(results))
+
+    monkeypatch.setattr(publish, "republish", republish)
+
+    async def go():
+        await runs.republish(1, pause=True)
+        with pytest.raises(RuntimeError):
+            await runs.republish(2, pause=True)
+        await runs.republish(3)
+
+    asyncio.run(go())
+    db = dbm.connect(runs.path)
+    assert dbm.get_setting(db, "paused_for") == "1"
+    db.close()
+
+
 def test_a_paused_schedule_starts_nothing_until_resumed(runs):
     db = dbm.connect(runs.path)
     dbm.set_setting(db, "paused_for", "4")

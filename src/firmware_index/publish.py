@@ -444,6 +444,7 @@ async def write(db, s: Settings, entries, body: bytes, sha: str, at, report: Rep
     else:
         snapshot = last["snapshot"]
     report.snapshot = snapshot
+    dbm.set_setting(db, "paused_for", "")
 
     public = keys.public_hex(s.key)
     latest = {

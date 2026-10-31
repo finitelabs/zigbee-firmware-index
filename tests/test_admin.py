@@ -32,10 +32,10 @@ class FakeRuns:
         self.started.append(anyway)
         return "a run"
 
-    async def republish(self, run_id):
+    async def republish(self, run_id, pause=False):
         if self.fail:
             raise RuntimeError(self.fail)
-        self.republished.append(run_id)
+        self.republished.append((run_id, pause))
 
 
 @pytest.fixture
@@ -414,7 +414,7 @@ def test_a_braked_run_publishes_only_once_publish_is_typed(admin):
     assert "Type+publish" in message(admin.post("/runs/3/publish", data={"confirm": "yes"}))
     assert admin.runs.republished == []
     assert "Published+run" in message(admin.post("/runs/3/publish", data={"confirm": "publish"}))
-    assert admin.runs.republished == [3]
+    assert admin.runs.republished == [(3, False)]
     assert audit(admin) == ["publish"]
 
 
@@ -426,7 +426,7 @@ def test_a_rollback_needs_only_its_button_and_the_live_run_offers_none(admin):
         and "confirm" not in confirm.split("<form")[1].split("</form>")[0]
     )
     assert "Rolled+back" in message(admin.post("/runs/1/publish"))
-    assert admin.runs.republished == [1]
+    assert admin.runs.republished == [(1, True)]
     assert "is+live" in message(admin.post("/runs/2/publish"))
     assert "is+live" in message(admin.get("/runs/2/publish"))
 
@@ -461,21 +461,26 @@ def test_a_rollback_pauses_scheduled_runs_until_resumed_and_keeps_the_schedule(a
     seed_runs(admin)
     admin.post("/schedule", data={"at": "05:30", "on": "1"})
     assert "scheduled+runs+are+paused" in message(admin.post("/runs/1/publish"))
-    assert dbm.get_setting(admin.db, "paused_for") == "1"
-    assert dbm.get_setting(admin.db, "schedule_on") == "1"
+    assert admin.runs.republished == [(1, True)]
+    dbm.set_setting(admin.db, "paused_for", "1")
     page = admin.get("/").text
     assert "Rolled back to run #1" in page and "Paused while rolled back to run #1" in page
     assert 'value="05:30"' in page and "Next run" not in page
     assert "no+longer+paused" in message(admin.post("/schedule/resume"))
     assert not dbm.get_setting(admin.db, "paused_for")
+    assert dbm.get_setting(admin.db, "schedule_on") == "1"
     page = admin.get("/").text
     assert "Resume scheduled runs" not in page and "Next run" in page
 
 
-def test_publishing_a_braked_run_does_not_pause_the_schedule(admin):
+def test_only_a_rollback_with_scheduled_runs_on_pauses_them(admin):
     seed_runs(admin)
     admin.post("/runs/3/publish", data={"confirm": "publish"})
-    assert not dbm.get_setting(admin.db, "paused_for")
+    admin.post("/schedule", data={"at": "04:00"})
+    assert "Scheduled runs are off, so this index stays" in admin.get("/runs/1/publish").text
+    rolled = message(admin.post("/runs/1/publish"))
+    assert "Rolled+back" in rolled and "paused" not in rolled
+    assert admin.runs.republished == [(3, False), (1, False)]
 
 
 def test_runs_that_kept_the_same_index_offer_it_once(admin):

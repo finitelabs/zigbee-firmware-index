@@ -9,7 +9,7 @@
   </div>
 </div>
 {% if paused_for %}
-<div class="note paused"><span>Rolled back to run #{{ paused_for }}'s index. Scheduled runs are paused so the next one doesn't build it again over the rollback; Publish now still works.</span>
+<div class="note paused"><span>Rolled back to run #{{ paused_for }}'s index. Scheduled runs are paused so the next one doesn't build it again over the rollback. Publish now still works, and anything you publish ends the pause.</span>
 <form class="inline" method="post" action="/schedule/resume"><button class="btn small">Resume scheduled runs</button></form></div>
 {% endif %}
 <div class="card">

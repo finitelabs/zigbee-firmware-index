@@ -342,6 +342,7 @@ async def confirm_publish(request: Request) -> Response:
         count=len(entries),
         live=len(before),
         changes=diff(before, entries),
+        pauses=runner.schedule(db)[0],
     )
 
 
@@ -356,15 +357,16 @@ async def publish_run(request: Request) -> Response:
         return back(f"/runs/{run['id']}", "This run's index is live, or it kept none to publish")
     if run["action"] == "publish" and (form.get("confirm") or "").strip() != "publish":
         return back(f"/runs/{run['id']}/publish", "Type publish to confirm")
+    pause = run["action"] == "rollback" and runner.schedule(db)[0]
     try:
-        await request.app.state.runs.republish(run["id"])
+        await request.app.state.runs.republish(run["id"], pause)
     except Exception as e:
         return back(f"/runs/{run['id']}", f"Could not publish: {e}")
     dbm.audit(db, request.state.user, run["action"], {"run": run["id"]})
-    if run["action"] == "rollback":
-        # A rollback is a stop-gap: the next scheduled run would build the index again.
-        dbm.set_setting(db, "paused_for", str(run["id"]))
+    if pause:
         return back("/", f"Rolled back to run #{run['id']}'s index; scheduled runs are paused")
+    if run["action"] == "rollback":
+        return back("/", f"Rolled back to run #{run['id']}'s index")
     return back("/", f"Published run #{run['id']}'s index")
 
 

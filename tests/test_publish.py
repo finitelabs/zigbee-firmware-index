@@ -194,6 +194,19 @@ def test_the_brake_holds_the_index_unless_told_to_publish_anyway(world):
     assert len(world.index()) == 18
 
 
+def test_only_a_run_that_publishes_ends_a_rollback_s_pause(world):
+    world.source("community", 3, A)
+    listed = files(world, 20)
+    world.fetcher.serve(A, listed)
+    world.run()
+    dbm.set_setting(world.db, "paused_for", "1")
+    world.fetcher.serve(A, listed[:18])
+    assert world.run().status == publish.BRAKE
+    assert dbm.get_setting(world.db, "paused_for") == "1"
+    assert world.run(anyway=True).status == publish.OK
+    assert not dbm.get_setting(world.db, "paused_for")
+
+
 def test_rules_hold_drop_and_correct_entries(world):
     world.source("community", 3, A)
     listed = files(world, 3)
