@@ -117,9 +117,11 @@ def open_db(request: Request) -> sqlite3.Connection:
     return request.scope["state"]["db"]
 
 
-def page(request: Request, name: str, **context) -> Response:
+def page(request: Request, name: str, status_code: int = 200, **context) -> Response:
     context.setdefault("message", request.query_params.get("message"))
-    return TEMPLATES.TemplateResponse(request, name, {"user": request.state.user, **context})
+    return TEMPLATES.TemplateResponse(
+        request, name, {"user": request.state.user, **context}, status_code=status_code
+    )
 
 
 def back(path: str, message: str) -> RedirectResponse:
@@ -300,10 +302,16 @@ async def images(request: Request) -> Response:
 
 async def image_detail(request: Request) -> Response:
     sha = request.path_params["sha"]
-    row = open_db(request).execute("SELECT entries FROM published WHERE id = 1").fetchone()
+    db = open_db(request)
+    row = db.execute("SELECT entries FROM published WHERE id = 1").fetchone()
     entries = [e for e in json.loads(row["entries"]) if e["sha512"] == sha] if row else []
     if not entries:
-        return PlainTextResponse("No such image in the published index", 404)
+        holding = [
+            {**dict(r), "match": json.loads(r["match"])}
+            for r in db.execute("SELECT * FROM rules WHERE action IN ('hold', 'drop')")
+            if json.loads(r["match"]).get("sha512") == sha
+        ]
+        return page(request, "image_gone.html", sha=sha, rules=holding, status_code=404)
     return page(request, "image.html", entries=entries, sha=sha, settable=list(rules.SETTABLE))
 
 

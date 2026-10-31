@@ -146,7 +146,14 @@ def test_images_search_and_each_action_makes_a_rule(admin):
     assert admin.post(f"/images/{'A' * 128}/rule", data={"action": "hold"}).status_code == 400
     assert "at+least+one+field" in message(admin.post(f"/images/{b}/rule", data={"action": "set"}))
 
+    gone = admin.get(f"/images/{'d' * 128}")
+    assert gone.status_code == 404 and "No rule holds or drops it" in gone.text
+    admin.post(f"/images/{'d' * 128}/rule", data={"action": "drop", "note": "bricks plugs"})
+    gone = admin.get(f"/images/{'d' * 128}").text
+    assert f"drop-{'d' * 12}" in gone and "bricks plugs" in gone
+
     rows = {r["id"]: r for r in admin.db.execute("SELECT * FROM rules")}
+    del rows[f"drop-{'d' * 12}"]
     assert set(rows) == {f"hold-{a[:12]}", f"hold-{a[:12]}-2", f"set-{b[:12]}"}
     assert json.loads(rows[f"hold-{a[:12]}"]["match"]) == {"sha512": a}
     assert rows[f"hold-{a[:12]}"]["author"] == ME
