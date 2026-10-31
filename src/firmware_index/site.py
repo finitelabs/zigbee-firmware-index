@@ -20,7 +20,7 @@ code {{ font-size: 0.9em; word-break: break-all; }}
 <body>
 <h1>Zigbee firmware index</h1>
 <p>Over-the-air firmware files for Zigbee devices, from {manufacturers} manufacturers:
-{count} files in all. Run by Finite Labs and checked once a day.</p>
+{count} files in all. Run by Finite Labs.</p>
 <h2>Use it</h2>
 <p>Point a Zigbee hub that reads an OTA index in the community Zigbee OTA index format at
 <code>{base}/index.json</code>.</p>

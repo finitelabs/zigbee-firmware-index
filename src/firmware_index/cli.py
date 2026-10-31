@@ -14,7 +14,6 @@ from firmware_index import keys, notify, publish
 from firmware_index.store import DirStore, R2Store
 
 EXIT = {publish.OK: 0, publish.FAILED: 1, publish.BRAKE: 2}
-TIMEOUT = aiohttp.ClientTimeout(total=300)
 
 
 def keygen(args: argparse.Namespace) -> int:
@@ -63,7 +62,7 @@ def run_publish(args: argparse.Namespace) -> int:
     db = dbm.connect(data / "index.sqlite3")
 
     async def go():
-        async with aiohttp.ClientSession(timeout=TIMEOUT) as session:
+        async with aiohttp.ClientSession() as session:
             report = await publish.run(db, settings, publish.HttpFetcher(session), data / "uploads")
         await notify.post(webhook, report)
         return report

@@ -14,7 +14,7 @@ INDEX = "index"
 ZIGPY = "zigpy"
 UPLOAD = "upload"
 
-# Spec section 4: lower priority wins a clash; delay in days.
+# Lower priority wins a clash; delay in days.
 DEFAULTS = [
     {"name": "uploads", "type": UPLOAD, "config": {}, "priority": 1, "delay_days": 0},
     {

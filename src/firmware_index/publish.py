@@ -23,7 +23,6 @@ from firmware_index.store import IMMUTABLE, SHORT, Store
 OK, BRAKE, FAILED = "ok", "brake", "failed"
 BRAKE_SHARE = 0.05
 DOWNLOADS = 4
-DOWNLOAD_TIMEOUT = 300
 
 
 class Fetcher(Protocol):
@@ -145,11 +144,10 @@ async def collect(db: sqlite3.Connection, fetcher: Fetcher, uploads: Path, repor
 async def download(c: Candidate, fetcher: Fetcher) -> bytes:
     if c.meta is not None and hasattr(c.meta, "_fetch"):
         # zigpy's own download and checks: its provider's certificates, sizes and checksums.
-        # Its session has no timeout of its own.
-        data = await asyncio.wait_for(c.meta._fetch(), DOWNLOAD_TIMEOUT)
+        data = await c.meta._fetch()
         await c.meta._validate(data)
         return data
-    data = await asyncio.wait_for(fetcher.get(c.url), DOWNLOAD_TIMEOUT)
+    data = await fetcher.get(c.url)
     if c.checksum:
         algorithm, want = c.checksum.split(":", 1)
         if hashlib.new(algorithm, data).hexdigest() != want.lower():
@@ -393,6 +391,10 @@ async def publish(db, s: Settings, entries: list[dict], at, report: Report) -> N
         "waiting": len(report.waiting),
         "clashes": len(report.clashes),
     }
+    if not entries and not before:
+        report.status = FAILED
+        report.alerts.append("no entries to publish, and nothing was published before")
+        return
     if before and len(removed) > BRAKE_SHARE * len(before) and not s.anyway:
         report.status = BRAKE
         report.alerts.append(

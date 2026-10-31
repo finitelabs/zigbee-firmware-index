@@ -1,4 +1,3 @@
-import asyncio
 import hashlib
 import json
 
@@ -128,15 +127,18 @@ def test_a_source_that_suddenly_lists_nothing_counts_as_failed(world):
 
 
 def test_a_delayed_source_waits_its_days(world):
+    world.source("community", 3, B)
+    world.fetcher.serve(B, files(world, 1, host="b.test"))
     world.source("vendor", 4, A, delay_days=7)
-    world.fetcher.serve(A, files(world, 1))
-    report = world.run()
-    assert report.counts["waiting"] == 1 and world.index() == []
+    world.fetcher.serve(A, files(world, 1, start=1))
 
+    report = world.run()
+
+    assert report.counts["waiting"] == 1
+    assert [e["sources"] for e in world.index()] == [["community"]]
     world.clock.advance(days=7)
-    assert len(world.index()) == 0
     world.run()
-    assert len(world.index()) == 1
+    assert [e["sources"] for e in world.index()] == [["community"], ["vendor"]]
 
 
 def test_a_clash_goes_to_the_higher_priority_and_one_file_names_every_source(world):
@@ -239,26 +241,6 @@ def test_zigpy_sources_download_through_zigpy(world, tmp_path, monkeypatch):
     assert world.fetcher.calls == []
 
 
-def test_a_download_that_hangs_fails_alone(world, monkeypatch):
-    world.source("community", 3, A)
-    listed = files(world, 2)
-    world.fetcher.serve(A, listed)
-    get = world.fetcher.get
-
-    async def slow(url):
-        if url == listed[0]["url"]:
-            await asyncio.sleep(10)
-        return await get(url)
-
-    monkeypatch.setattr(world.fetcher, "get", slow)
-    monkeypatch.setattr(publish, "DOWNLOAD_TIMEOUT", 0.05)
-
-    report = world.run()
-
-    assert len(world.index()) == 1
-    assert report.failures[0]["reason"].startswith("TimeoutError")
-
-
 def test_uploads_are_published_from_the_volume(world):
     world.source("uploads", 1, type_="upload", config={})
     data = ota_file(0x1234, 1, 0x30)
@@ -291,11 +273,23 @@ def test_a_second_run_waits_for_the_lock(world):
     assert world.run().status == publish.OK
 
 
+def test_a_first_run_with_nothing_to_publish_publishes_nothing(world):
+    world.source("community", 3, A)
+
+    report = world.run()
+
+    assert report.status == publish.FAILED
+    assert report.alerts[-1] == "no entries to publish, and nothing was published before"
+    assert not (world.site / "index.json").exists()
+
+
 def test_the_discord_message_names_the_status_alerts_and_counts(world):
     world.source("community", 3, A)
     report = world.run()
     text = notify.message(report)
-    assert text.startswith("Firmware index run 2026-10-30T04:00:00Z: ok\n- source community failed")
+    assert text.startswith(
+        "Firmware index run 2026-10-30T04:00:00Z: failed\n- source community failed"
+    )
     assert "entries 0" in text
     report.alerts = []
     assert notify.message(report) is None
