@@ -21,10 +21,13 @@ def test_a_run_is_due_once_a_day_at_or_after_its_time():
     assert not runner.due(False, "04:00", None, at(15))
 
 
-def test_the_next_run_is_today_or_tomorrow():
-    assert runner.next_run("04:00", at(3)) == at(4)
-    assert runner.next_run("04:00", at(4)) == at(4, day=1).replace(month=11)
-    assert runner.next_run("23:30", at(12)) == at(23, 30)
+def test_the_next_run_is_due_now_today_or_tomorrow():
+    assert runner.next_run("04:00", at(3), None) == at(4)
+    assert runner.next_run("04:00", at(9), None) == at(9)
+    assert runner.next_run("04:00", at(9), "2026-10-31") == at(4, day=1).replace(month=11)
+    # Today's run done at 04:00 and the time then moved to 05:00: the next is tomorrow's.
+    assert runner.next_run("05:00", at(4, 30), "2026-10-31") == at(5, day=1).replace(month=11)
+    assert runner.next_run("23:30", at(12), "2026-10-30") == at(23, 30)
 
 
 @pytest.fixture
@@ -74,3 +77,34 @@ def test_one_run_at_a_time(runs):
 
     asyncio.run(go())
     assert runs.started == [{"anyway": True}]
+
+
+def test_a_scheduled_run_cut_short_is_caught_up(runs, monkeypatch):
+    async def slow(data, settings, webhook):
+        await asyncio.sleep(30)
+
+    monkeypatch.setattr(runner, "publish_once", slow)
+
+    async def go():
+        assert await runs.tick(at(4, 1))
+        await asyncio.sleep(0)
+        runs.task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await runs.task
+        db = dbm.connect(runs.path)
+        assert dbm.get_setting(db, "schedule_last") is None
+        db.close()
+        assert await runs.tick(at(4, 2))
+        runs.task.cancel()
+
+    asyncio.run(go())
+
+
+def test_a_finished_scheduled_run_marks_its_day(runs):
+    async def go():
+        await runs.tick(at(4, 1))
+        await runs.task
+
+    asyncio.run(go())
+    db = dbm.connect(runs.path)
+    assert dbm.get_setting(db, "schedule_last") == "2026-10-31"

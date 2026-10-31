@@ -37,9 +37,12 @@ def today_at(at: str, now: datetime.datetime) -> datetime.datetime:
     return now.replace(hour=hour, minute=minute, second=0, microsecond=0)
 
 
-def next_run(at: str, now: datetime.datetime) -> datetime.datetime:
+def next_run(at: str, now: datetime.datetime, last_day: str | None) -> datetime.datetime:
+    """When the next scheduled run starts: now if today's is due, else today's or tomorrow's."""
     t = today_at(at, now)
-    return t if t > now else t + datetime.timedelta(days=1)
+    if last_day == now.date().isoformat():
+        return t + datetime.timedelta(days=1)
+    return max(t, now)
 
 
 def due(on: bool, at: str, last_day: str | None, now: datetime.datetime) -> bool:
@@ -60,13 +63,22 @@ class Runner:
     def running(self) -> bool:
         return self.task is not None and not self.task.done()
 
-    async def start(self, anyway: bool) -> str:
+    async def start(self, anyway: bool, day: str | None = None) -> str:
+        """Start a run. A scheduled one names its day, marked done only once the run finishes, so
+        a run a restart cut short is caught up."""
         if self.running:
             raise RuntimeError("a run is already going")
-        self.task = asyncio.create_task(
-            publish_once(self.data, self.settings_for(anyway), self.webhook)
-        )
+        self.task = asyncio.create_task(self._run(anyway, day))
         return "a run"
+
+    async def _run(self, anyway: bool, day: str | None) -> None:
+        await publish_once(self.data, self.settings_for(anyway), self.webhook)
+        if day:
+            db = dbm.connect(self.data / "index.sqlite3")
+            try:
+                dbm.set_setting(db, "schedule_last", day)
+            finally:
+                db.close()
 
     async def tick(self, now: datetime.datetime) -> bool:
         db = dbm.connect(self.data / "index.sqlite3")
@@ -74,10 +86,9 @@ class Runner:
             on, at = schedule(db)
             if self.running or not due(on, at, dbm.get_setting(db, "schedule_last"), now):
                 return False
-            dbm.set_setting(db, "schedule_last", now.date().isoformat())
         finally:
             db.close()
-        await self.start(False)
+        await self.start(False, now.date().isoformat())
         return True
 
     async def loop(self) -> None:

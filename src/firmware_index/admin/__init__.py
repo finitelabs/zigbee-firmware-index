@@ -168,7 +168,10 @@ async def runs(request: Request) -> Response:
     shown = [{**dict(r), "report": json.loads(r["report"] or "{}")} for r in rows]
     published = db.execute("SELECT snapshot, at FROM published WHERE id = 1").fetchone()
     on, at = runner.schedule(db)
-    upcoming = dbm.iso(runner.next_run(at, dbm.now())) if on else None
+    now = dbm.now()
+    upcoming = None
+    if on:
+        upcoming = dbm.iso(runner.next_run(at, now, dbm.get_setting(db, "schedule_last")))
     return page(
         request,
         "runs.html",
