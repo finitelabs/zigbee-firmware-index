@@ -34,12 +34,25 @@ TEMPLATES.env.filters["hex4"] = lambda n: f"0x{n:04X}" if isinstance(n, int) els
 TEMPLATES.env.filters["hex8"] = lambda n: f"0x{n:08X}" if isinstance(n, int) else ""
 TEMPLATES.env.filters["when"] = lambda t: t.replace("T", " ")[:16] + " UTC" if t else ""
 
-# zigpy's providers that list files on their own (its other types read a folder or a set URL).
-PROVIDERS = {"zigpy_ota": "zigpy-ota", "ledvance": "Ledvance", "sonoff": "Sonoff", "ikea": "IKEA"}
+# zigpy's providers that list files on their own. Of its others, salus, thirdreality and inovelli
+# are stubs that list nothing, and the local ones and zigpy_remote need a folder or URL given.
+PROVIDERS = {
+    "zigpy_ota": "zigpy-ota",
+    "z2m": "Community index (zigpy)",
+    "ledvance": "Ledvance",
+    "sonoff": "Sonoff",
+    "ikea": "IKEA",
+}
 CHANNELS = ["stable", "beta", "dev"]
 HEX4 = {"manufacturerCode", "imageType", "manufacturer", "image_type"}
-HEX8 = {"fileVersion", "version", "minFileVersion", "maxFileVersion", "min_file_version"}
-HEX8 |= {"max_file_version"}
+HEX8 = {
+    "fileVersion",
+    "version",
+    "minFileVersion",
+    "maxFileVersion",
+    "min_file_version",
+    "max_file_version",
+}
 SHAS = {"sha512", "upstreamSha512"}
 
 
@@ -126,6 +139,10 @@ def page(request: Request, name: str, status_code: int = 200, **context) -> Resp
 
 def back(path: str, message: str) -> RedirectResponse:
     return RedirectResponse(f"{path}?{urlencode({'message': message})}", status_code=303)
+
+
+def default(value: int | None, fallback: int) -> int:
+    return fallback if value is None else value
 
 
 def optional_int(value: str | None) -> int | None:
@@ -217,8 +234,8 @@ def source_fields(form) -> dict:
     return {
         "type": kind,
         "config": json.dumps(config),
-        "priority": optional_int(form.get("priority")) or 10,
-        "delay_days": optional_int(form.get("delay_days")) or 0,
+        "priority": default(optional_int(form.get("priority")), 10),
+        "delay_days": default(optional_int(form.get("delay_days")), 0),
         "enabled": int(form.get("enabled") == "1"),
     }
 

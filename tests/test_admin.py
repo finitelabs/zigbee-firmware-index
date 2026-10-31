@@ -99,11 +99,17 @@ def test_sources_are_listed_added_checked_and_edited(admin):
     admin.post("/sources", data=beta)
     row = admin.db.execute("SELECT config FROM sources WHERE name = 'beta'").fetchone()
     assert json.loads(row["config"]) == {"provider": "zigpy_ota", "channel": "beta"}
+    community = {"name": "c2", "type": "zigpy", "provider": "z2m", "priority": "0"}
+    admin.post("/sources", data=community)
+    row = admin.db.execute("SELECT config, priority FROM sources WHERE name = 'c2'").fetchone()
+    assert (json.loads(row["config"]), row["priority"]) == ({"provider": "z2m"}, 0)
+    page = admin.get("/sources").text
+    assert '<option value="z2m" selected>' in page
     sonoff = {"name": "s2", "type": "zigpy", "provider": "sonoff", "channel": "beta"}
     admin.post("/sources", data=sonoff)
     row = admin.db.execute("SELECT config FROM sources WHERE name = 's2'").fetchone()
     assert json.loads(row["config"]) == {"provider": "sonoff"}
-    assert audit(admin) == ["source.add", "source.edit", "source.add", "source.add"]
+    assert audit(admin) == ["source.add", "source.edit", "source.add", "source.add", "source.add"]
 
 
 def publish_entries(admin, entries):
@@ -147,7 +153,7 @@ def test_images_search_and_each_action_makes_a_rule(admin):
     assert "at+least+one+field" in message(admin.post(f"/images/{b}/rule", data={"action": "set"}))
 
     gone = admin.get(f"/images/{'d' * 128}")
-    assert gone.status_code == 404 and "No rule holds or drops it" in gone.text
+    assert gone.status_code == 404 and "No rule names this file" in gone.text
     admin.post(f"/images/{'d' * 128}/rule", data={"action": "drop", "note": "bricks plugs"})
     gone = admin.get(f"/images/{'d' * 128}").text
     assert f"drop-{'d' * 12}" in gone and "bricks plugs" in gone
