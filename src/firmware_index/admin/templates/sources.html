@@ -14,7 +14,7 @@
   <form method="post" action="/sources">
     <div class="fields">
       <div class="field"><label>Name</label><input type="text" name="name" required></div>
-      <div class="field mid"><label>Type {{ m.help("Community index format: give the URL of an index.json, like the community index's. zigpy provider: pick zigpy-ota or a vendor's own feed; zigpy reads it, so there is nothing else to set up.") }}</label><select name="type" id="kind">
+      <div class="field mid"><label>Type {{ m.help("Community index format: give the URL of an index.json, like the community index's. zigpy provider: pick zigpy-ota, the community index or a vendor's own feed; zigpy reads it, so there is nothing else to set up.") }}</label><select name="type" id="kind">
         <option value="index">Community index format</option><option value="zigpy">zigpy provider</option></select></div>
       <div class="field wide" data-for="index"><label>Index URL</label><input type="url" name="url" placeholder="https://..."></div>
       <div class="field" data-for="zigpy" hidden><label>Provider</label><select name="provider">{% for k, v in providers.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select></div>
