@@ -101,6 +101,10 @@ def main(argv: list[str] | None = None) -> int:
     p = commands.add_parser("dump", help="write a consistent copy of the database to stdout")
     p.set_defaults(run=dump)
 
+    p = commands.add_parser("check", help="check the public site as a reader sees it")
+    p.add_argument("url", help="the site, for example https://ota.finitelabs.com")
+    p.set_defaults(run=run_check)
+
     args = parser.parse_args(argv)
     return args.run(args)
 
@@ -128,3 +132,23 @@ def serve(args: argparse.Namespace) -> int:
 def dump(args: argparse.Namespace) -> int:
     dbm.dump(data_dir() / "index.sqlite3", sys.stdout.buffer)
     return 0
+
+
+def run_check(args: argparse.Namespace) -> int:
+    from firmware_index import check
+
+    async def go():
+        async with aiohttp.ClientSession() as session:
+            return await check.problems(
+                args.url.rstrip("/"),
+                publish.HttpFetcher(session),
+                dbm.now(),
+                os.environ.get("SIGNING_KEY_PUB") or None,
+            )
+
+    found = asyncio.run(go())
+    for p in found:
+        print(f"error: {p}", file=sys.stderr)
+    if not found:
+        print(f"{args.url}: ok")
+    return 1 if found else 0

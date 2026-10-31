@@ -20,6 +20,7 @@ The image's entry point is `python -m firmware_index`:
 | `serve`                  | The admin page (the image's default command)                          |
 | `dump`                   | Writes a consistent copy of the database to stdout, for backups       |
 | `keygen PATH`            | Writes a new Ed25519 signing key to PATH and prints its public key    |
+| `check URL`              | Checks the public site as a reader sees it; exits 1 on any problem    |
 
 `publish` reads:
 
@@ -76,6 +77,19 @@ needs no sign-in.
 7. Uploads new files, a new snapshot if the index changed, then `index.json`
    and `latest.json`, which names the snapshot and carries an Ed25519 signature
    over `<snapshot path>\n<sha512>`.
+
+## The outside check
+
+`check URL` reads `latest.json`, the snapshot it names and `signing-key.pub`. It
+fails if the last good run is over 48 hours old, the snapshot's sha512 or the
+signature does not match, or the snapshot is empty. With `SIGNING_KEY_PUB` set,
+the site's key must be that key.
+
+The Check the site workflow runs it every 6 hours from GitHub, once the
+repository variable `OTA_CHECK_ENABLED` is `true`. It reads
+the variables `PUBLIC_URL` and `SIGNING_KEY_PUB`, and posts a failure to the
+secret `DISCORD_WEBHOOK_URL`. GitHub turns a schedule off after 60 days with no
+activity in the repository.
 
 ## Development
 
