@@ -1,10 +1,19 @@
 """The firmware-index command."""
 
 import argparse
+import asyncio
+import json
+import os
 import sys
 from pathlib import Path
 
-from firmware_index import keys
+import aiohttp
+
+from firmware_index import db as dbm
+from firmware_index import keys, notify, publish
+from firmware_index.store import DirStore, R2Store
+
+EXIT = {publish.OK: 0, publish.FAILED: 1, publish.BRAKE: 2}
 
 
 def keygen(args: argparse.Namespace) -> int:
@@ -17,6 +26,52 @@ def keygen(args: argparse.Namespace) -> int:
     return 0
 
 
+def env(name: str) -> str:
+    value = os.environ.get(name)
+    if not value:
+        raise SystemExit(f"error: {name} is not set")
+    return value
+
+
+def run_publish(args: argparse.Namespace) -> int:
+    if args.dry_run:
+        root = args.dry_run
+        data = root / "data"
+        data.mkdir(parents=True, exist_ok=True)
+        key_path = data / "dry-run.pem"
+        if not key_path.exists():
+            keys.generate(key_path)
+        store = DirStore(root / "site")
+        webhook = None
+        base = os.environ.get("PUBLIC_URL", (root / "site").resolve().as_uri())
+    else:
+        data = Path(os.environ.get("DATA_DIR", "/data"))
+        key_path = Path(env("SIGNING_KEY_PATH"))
+        store = R2Store(
+            env("R2_ENDPOINT"),
+            env("R2_BUCKET"),
+            env("R2_ACCESS_KEY_ID"),
+            env("R2_SECRET_ACCESS_KEY"),
+        )
+        webhook = os.environ.get("DISCORD_WEBHOOK_URL")
+        base = os.environ.get("PUBLIC_URL", "https://ota.finitelabs.com")
+
+    settings = publish.Settings(
+        public_url=base.rstrip("/"), key=keys.load(key_path), store=store, anyway=args.anyway
+    )
+    db = dbm.connect(data / "index.sqlite3")
+
+    async def go():
+        async with aiohttp.ClientSession() as session:
+            report = await publish.run(db, settings, publish.HttpFetcher(session), data / "uploads")
+        await notify.post(webhook, report)
+        return report
+
+    report = asyncio.run(go())
+    print(json.dumps({"status": report.status, "counts": report.counts, "alerts": report.alerts}))
+    return EXIT[report.status]
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="firmware-index")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -27,6 +82,18 @@ def main(argv: list[str] | None = None) -> int:
     )
     p.add_argument("path", type=Path, help="where to write the private key (PEM)")
     p.set_defaults(run=keygen)
+
+    p = commands.add_parser("publish", help="run once: check the sources and publish")
+    p.add_argument(
+        "--anyway", action="store_true", help="publish even if the brake would hold the index"
+    )
+    p.add_argument(
+        "--dry-run",
+        type=Path,
+        metavar="DIR",
+        help="publish to DIR/site with its own database and key in DIR/data",
+    )
+    p.set_defaults(run=run_publish)
 
     args = parser.parse_args(argv)
     return args.run(args)

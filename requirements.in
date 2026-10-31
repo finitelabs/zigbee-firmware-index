@@ -1,3 +1,6 @@
 --index-url https://pypi.python.org/simple
 
+aiohttp
+boto3
 cryptography
+zigpy

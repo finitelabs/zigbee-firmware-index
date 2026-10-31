@@ -1,0 +1,59 @@
+[
+  {
+    "fileName": "MainsPowerOutlet_JN5169_PCB_ARC_OTA_0x1409_v22.ota",
+    "fileVersion": 22,
+    "fileSize": 173726,
+    "url": "https://raw.githubusercontent.com/Koenkk/zigbee-OTA/master/images/Aurora/MainsPowerOutlet_JN5169_PCB_ARC_OTA_0x1409_v22.ota",
+    "imageType": 5129,
+    "manufacturerCode": 4636,
+    "sha512": "7b1c6733fbf0f081e5e4ebb946616d88ccd482790a5365d0cfa9c2d050a6dddef56291bb749a33c903c57944782d69100562614755202e3be013eaf58ed70e38",
+    "otaHeaderString": "DoubleSocket50AU--UNENC000JN5169"
+  },
+  {
+    "fileName": "tretakt_smart_plug_soc-0x1100-2.4.25-prod.ota.ota.signed",
+    "fileVersion": 33816613,
+    "fileSize": 280318,
+    "url": "https://raw.githubusercontent.com/Koenkk/zigbee-OTA/master/images/IKEA/tretakt_smart_plug_soc-0x1100-2.4.25-prod.ota.ota.signed",
+    "imageType": 4352,
+    "manufacturerCode": 4476,
+    "sha512": "cd2f88f3f47f459218dd23d1317e76f413cea8a4eedee047a7a6627a595e742f47ec2783eeb2b33e634435cda3f219fa7b540dde6d67876f05d3fdf6feb636d2",
+    "otaHeaderString": "GBL tretakt_smart_plug_soc",
+    "originalUrl": "http://fw.ota.homesmart.ikea.net/global/GW1.0/01.21.031/bin/tretakt_smart_plug_soc-0x1100-2.4.25-prod.ota.ota.signed",
+    "releaseNotes": "https://ww8.ikea.com/ikeahomesmart/releasenotes/releasenotes.html",
+    "modelId": "TRETAKT Smart plug"
+  },
+  {
+    "fileName": "Pico_Duo_Switch_V1.0.6.ota",
+    "fileVersion": 262,
+    "fileSize": 311594,
+    "originalUrl": "https://github.com/Aeotec-ccheng/aeotecZigbeeProducts/main/ZigbeeOTAUpdates/Pico_Duo_Switch_V1.ota",
+    "url": "https://raw.githubusercontent.com/Koenkk/zigbee-OTA/master/images/Aeotec/Pico_Duo_Switch_V1.0.6.ota",
+    "imageType": 2051,
+    "manufacturerCode": 4880,
+    "sha512": "e60097b31873716ddfab1f3ae8e4ef493216c1535d5f6a1ae207c49daf5b5c6e19ea89fc39bf7e83068253d933c65d472254a11faba4a8066ee3380501615558",
+    "otaHeaderString": "EBL DualPicoSw",
+    "hardwareVersionMax": 1,
+    "hardwareVersionMin": 1,
+    "manufacturerName": [
+      "AEOTEC",
+      "Aeotec",
+      "aeotec"
+    ],
+    "maxFileVersion": 261,
+    "modelId": "ZGA003",
+    "releaseNotes": ""
+  },
+  {
+    "fileName": "100B-0110-01002602-ConfLight-Lamps-EFR32MG13.zigbee",
+    "fileVersion": 16786946,
+    "fileSize": 328956,
+    "url": "https://raw.githubusercontent.com/Koenkk/zigbee-OTA/master/images/Hue/100B-0110-01002602-ConfLight-Lamps-EFR32MG13.zigbee",
+    "imageType": 272,
+    "manufacturerCode": 4107,
+    "sha512": "4d15669f586c39da05fdfa95506fa085e297e177e5f2e962ce5f8ec2788f1d4488f880c35c2f2a1e0279ffe66272c99d27ca6da5d80512b88fcf50a574647a64",
+    "otaHeaderString": "",
+    "originalUrl": "https://otau.meethue.com/storage/ZGB_100B_0110/77cabadf-422e-4b65-a971-b40f6422ca6f/100B-0110-01002602-ConfLight-Lamps-EFR32MG13.zigbee",
+    "minFileVersion": 16778240,
+    "maxFileVersion": 16786945
+  }
+]
