@@ -4,7 +4,7 @@ import datetime
 import pytest
 
 from firmware_index import db as dbm
-from firmware_index import runner
+from firmware_index import publish, runner
 
 UTC = datetime.UTC
 
@@ -37,6 +37,7 @@ def runs(tmp_path, monkeypatch):
     async def fake_publish(data, settings, webhook):
         started.append(settings)
         await asyncio.sleep(0.01)
+        return publish.Report(started="t")
 
     monkeypatch.setattr(runner, "publish_once", fake_publish)
     dbm.connect(tmp_path / "index.sqlite3").close()
@@ -144,3 +145,40 @@ def test_a_discord_post_that_times_out_still_marks_the_day(tmp_path, monkeypatch
     asyncio.run(go())
     db = dbm.connect(tmp_path / "index.sqlite3")
     assert dbm.get_setting(db, "schedule_last") == "2026-10-31"
+
+
+def test_a_republish_counts_as_the_running_run(runs, monkeypatch):
+    async def slow(db, settings, run_id):
+        await asyncio.sleep(0.05)
+        return publish.Report(started="t")
+
+    monkeypatch.setattr(publish, "republish", slow)
+
+    async def go():
+        job = asyncio.create_task(runs.republish(1))
+        await asyncio.sleep(0.01)
+        assert runs.running
+        assert not await runs.tick(at(4, 1))
+        with pytest.raises(RuntimeError, match="already going"):
+            await runs.start(False)
+        await job
+
+    asyncio.run(go())
+    assert runs.started == []
+
+
+def test_a_scheduled_run_the_lock_refused_leaves_its_day_open(runs, monkeypatch):
+    async def locked(data, settings, webhook):
+        report = publish.Report(started="t", status=publish.FAILED)
+        report.alerts.append(publish.LOCKED)
+        return report
+
+    monkeypatch.setattr(runner, "publish_once", locked)
+
+    async def go():
+        assert await runs.tick(at(4, 1))
+        await runs.task
+        assert await runs.tick(at(4, 2))
+        await runs.task
+
+    asyncio.run(go())

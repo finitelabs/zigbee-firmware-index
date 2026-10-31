@@ -72,8 +72,8 @@ class Runner:
         return "a run"
 
     async def _run(self, anyway: bool, day: str | None) -> None:
-        await publish_once(self.data, self.settings_for(anyway), self.webhook)
-        if day:
+        report = await publish_once(self.data, self.settings_for(anyway), self.webhook)
+        if day and publish.LOCKED not in report.alerts:
             db = dbm.connect(self.data / "index.sqlite3")
             try:
                 dbm.set_setting(db, "schedule_last", day)
@@ -84,14 +84,19 @@ class Runner:
         """Publish the index an earlier run built, now, in place of the live one."""
         if self.running:
             raise RuntimeError("a run is already going")
+        self.task = asyncio.create_task(self._republish(run_id))
+        report = await self.task
+        if report.status != publish.OK:
+            raise RuntimeError("; ".join(report.alerts) or "it failed")
+        return report
+
+    async def _republish(self, run_id: int) -> publish.Report:
         db = dbm.connect(self.data / "index.sqlite3")
         try:
             report = await publish.republish(db, self.settings_for(True), run_id)
         finally:
             db.close()
         await notify.post(self.webhook, report)
-        if report.status != publish.OK:
-            raise RuntimeError("; ".join(report.alerts) or "it failed")
         return report
 
     async def tick(self, now: datetime.datetime) -> bool:

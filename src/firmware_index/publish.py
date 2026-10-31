@@ -21,6 +21,7 @@ from firmware_index.sources import Candidate
 from firmware_index.store import IMMUTABLE, SHORT, Store
 
 OK, BRAKE, FAILED = "ok", "brake", "failed"
+LOCKED = "another run holds the lock"
 BRAKE_SHARE = 0.05
 DOWNLOADS = 4
 
@@ -356,7 +357,7 @@ async def run(db: sqlite3.Connection, s: Settings, fetcher: Fetcher, uploads: Pa
     holder = uuid.uuid4().hex
     if not dbm.take_lock(db, holder, at):
         report.status = FAILED
-        report.alerts.append("another run holds the lock")
+        report.alerts.append(LOCKED)
         return report
     run_id = db.execute(
         "INSERT INTO runs (started, anyway) VALUES (?, ?)", (report.started, int(s.anyway))
@@ -475,7 +476,7 @@ async def republish(db, s: Settings, source_run: int) -> Report:
     holder = uuid.uuid4().hex
     if not dbm.take_lock(db, holder, at):
         report.status = FAILED
-        report.alerts.append("another run holds the lock")
+        report.alerts.append(LOCKED)
         return report
     run_id = db.execute(
         "INSERT INTO runs (started, anyway) VALUES (?, 1)", (report.started,)
