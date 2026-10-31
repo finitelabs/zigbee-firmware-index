@@ -14,6 +14,8 @@ from firmware_index import keys, notify, publish
 from firmware_index.store import DirStore, R2Store
 
 EXIT = {publish.OK: 0, publish.FAILED: 1, publish.BRAKE: 2}
+LOCAL_USER = "local@localhost"
+LOCAL_PORT = 8080
 
 
 def keygen(args: argparse.Namespace) -> int:
@@ -33,41 +35,55 @@ def env(name: str) -> str:
     return value
 
 
-def run_publish(args: argparse.Namespace) -> int:
-    if args.dry_run:
-        root = args.dry_run
-        data = root / "data"
-        data.mkdir(parents=True, exist_ok=True)
-        key_path = data / "dry-run.pem"
-        if not key_path.exists():
-            keys.generate(key_path)
-        store = DirStore(root / "site")
-        webhook = None
-        base = os.environ.get("PUBLIC_URL", (root / "site").resolve().as_uri())
-    else:
-        data = data_dir()
-        key_path = Path(env("SIGNING_KEY_PATH"))
-        store = R2Store(
-            env("R2_ENDPOINT"),
-            env("R2_BUCKET"),
-            env("R2_ACCESS_KEY_ID"),
-            env("R2_SECRET_ACCESS_KEY"),
-        )
-        webhook = os.environ.get("DISCORD_WEBHOOK_URL")
-        base = os.environ.get("PUBLIC_URL", "https://ota.finitelabs.com")
-
+def local_settings(root: Path, base: str, anyway: bool) -> tuple[Path, publish.Settings]:
+    """Run locally: the store is the folder root/site, and root/data holds the database and a
+    signing key made on first use."""
+    data = root / "data"
+    data.mkdir(parents=True, exist_ok=True)
+    key_path = data / "local.pem"
+    if not key_path.exists():
+        keys.generate(key_path)
     settings = publish.Settings(
-        public_url=base.rstrip("/"), key=keys.load(key_path), store=store, anyway=args.anyway
+        public_url=base.rstrip("/"),
+        key=keys.load(key_path),
+        store=DirStore(root / "site"),
+        anyway=anyway,
     )
-    db = dbm.connect(data / "index.sqlite3")
+    return data, settings
 
-    async def go():
+
+async def publish_once(data: Path, settings: publish.Settings, webhook: str | None):
+    db = dbm.connect(data / "index.sqlite3")
+    try:
         async with aiohttp.ClientSession() as session:
             report = await publish.run(db, settings, publish.HttpFetcher(session), data / "uploads")
-        await notify.post(webhook, report)
-        return report
+    finally:
+        db.close()
+    await notify.post(webhook, report)
+    return report
 
-    report = asyncio.run(go())
+
+def run_publish(args: argparse.Namespace) -> int:
+    if args.local:
+        base = os.environ.get("PUBLIC_URL", f"http://127.0.0.1:{LOCAL_PORT}/site")
+        data, settings = local_settings(args.local, base, args.anyway)
+        webhook = None
+    else:
+        data = data_dir()
+        settings = publish.Settings(
+            public_url=os.environ.get("PUBLIC_URL", "https://ota.finitelabs.com").rstrip("/"),
+            key=keys.load(Path(env("SIGNING_KEY_PATH"))),
+            store=R2Store(
+                env("R2_ENDPOINT"),
+                env("R2_BUCKET"),
+                env("R2_ACCESS_KEY_ID"),
+                env("R2_SECRET_ACCESS_KEY"),
+            ),
+            anyway=args.anyway,
+        )
+        webhook = os.environ.get("DISCORD_WEBHOOK_URL")
+
+    report = asyncio.run(publish_once(data, settings, webhook))
     print(json.dumps({"status": report.status, "counts": report.counts, "alerts": report.alerts}))
     return EXIT[report.status]
 
@@ -88,14 +104,20 @@ def main(argv: list[str] | None = None) -> int:
         "--anyway", action="store_true", help="publish even if the brake would hold the index"
     )
     p.add_argument(
-        "--dry-run",
+        "--local",
         type=Path,
         metavar="DIR",
-        help="publish to DIR/site with its own database and key in DIR/data",
+        help="publish to the folder DIR/site, with its own database and key in DIR/data",
     )
     p.set_defaults(run=run_publish)
 
     p = commands.add_parser("serve", help="the admin page")
+    p.add_argument(
+        "--local",
+        type=Path,
+        metavar="DIR",
+        help="run on this computer: 127.0.0.1 only, no sign-in, runs publish to DIR",
+    )
     p.set_defaults(run=serve)
 
     p = commands.add_parser("dump", help="write a consistent copy of the database to stdout")
@@ -117,6 +139,26 @@ def serve(args: argparse.Namespace) -> int:
     import uvicorn
 
     from firmware_index.admin import create_app
+
+    if args.local:
+        port = int(os.environ.get("PORT", LOCAL_PORT))
+        base = f"http://127.0.0.1:{port}/site"
+        root = args.local
+        (root / "site").mkdir(parents=True, exist_ok=True)
+        running = set()
+
+        async def start(anyway: bool) -> str:
+            data, settings = local_settings(root, base, anyway)
+            task = asyncio.create_task(publish_once(data, settings, None))
+            running.add(task)
+            task.add_done_callback(running.discard)
+            return "a local run"
+
+        data, _ = local_settings(root, base, False)
+        app = create_app(data, {LOCAL_USER}, start, local_user=LOCAL_USER, site=root / "site")
+        print(f"The admin page is at http://127.0.0.1:{port}/ and the site at {base}/")
+        uvicorn.run(app, host="127.0.0.1", port=port)
+        return 0
 
     emails = set(env("ADMIN_EMAILS").split(","))
     app = create_app(data_dir(), emails)

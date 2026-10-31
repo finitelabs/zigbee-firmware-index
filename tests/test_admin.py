@@ -13,7 +13,7 @@ from starlette.testclient import TestClient
 
 from firmware_index import db as dbm
 from firmware_index import admin as admin_module
-from firmware_index import kube
+from firmware_index import cli, keys, kube
 from firmware_index.admin import create_app
 
 ME = "derek@example.test"
@@ -262,3 +262,40 @@ def test_a_url_upload_reads_the_whole_file_however_it_arrives():
             return await admin_module.fetch_limited(str(server.make_url("/fw.ota")))
 
     assert asyncio.run(go()) == body
+
+
+def test_run_locally_the_local_user_needs_no_sign_in_and_the_site_is_served(tmp_path):
+    site = tmp_path / "site"
+    site.mkdir()
+    (site / "index.json").write_text("[]\n")
+    started = []
+
+    async def start(anyway):
+        started.append(anyway)
+        return "a local run"
+
+    app = create_app(tmp_path, {"local@localhost"}, start, "local@localhost", site)
+    assert TestClient(app).get("/", headers={"host": "rebound.example.test"}).status_code == 403
+    client = TestClient(app, base_url="http://localhost:8080", follow_redirects=False)
+    assert "local@localhost" in client.get("/").text
+    assert client.get("/", headers={"x-auth-request-email": "x@example.test"}).status_code == 200
+    assert client.get("/site/index.json").text == "[]\n"
+    assert client.post("/publish", data={"anyway": "0"}).status_code == 403
+    done = client.post(
+        "/publish", data={"anyway": "0"}, headers={"origin": "http://localhost:8080"}
+    )
+    assert "Started+a+local+run" in done.headers["location"] and started == [False]
+
+
+def test_the_site_is_served_only_when_run_locally(admin):
+    assert admin.get("/site/index.json").status_code == 404
+
+
+def test_local_settings_make_one_key_and_publish_to_the_folder(tmp_path):
+    data, first = cli.local_settings(tmp_path, "http://127.0.0.1:8080/site/", False)
+    _, again = cli.local_settings(tmp_path, "http://127.0.0.1:8080/site", True)
+    assert data == tmp_path / "data"
+    assert keys.public_hex(first.key) == keys.public_hex(again.key)
+    assert first.public_url == "http://127.0.0.1:8080/site" and again.anyway
+    first.store.put("x/y.json", b"{}", "application/json", "")
+    assert (tmp_path / "site" / "x" / "y.json").read_bytes() == b"{}"
