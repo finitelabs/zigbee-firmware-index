@@ -1,29 +1,33 @@
 {% extends "base.html" %}
+{% import "_macros.html" as m %}
 {% block content %}
-<h1>Images</h1>
-<form method="get" action="/images"><input type="text" name="q" value="{{ q }}" placeholder="manufacturer, image type, model, file, source"> <button>Search</button></form>
-<p class="muted">{{ total }} published entries{% if q %} match{% endif %}{% if total > limit %}; the first {{ limit }} shown{% endif %}.</p>
-<div class="wide">
-<table>
-<tr><th>Manufacturer</th><th>Image type</th><th>Version</th><th>Model</th><th>File</th><th>Size</th><th>Sources</th><th>Rules</th><th></th></tr>
+<div class="head">
+  <div><h1>Images</h1><p>Every file in the published index. Hold, drop or correct one from its page; each adds a rule.</p></div>
+</div>
+<div class="card">
+  <form method="get" action="/images" class="fields">
+    <div class="field wide"><label>Search</label><input type="search" name="q" value="{{ q }}" placeholder="Vendor, model, file name, source, or a manufacturer code or image type in hex"></div>
+    <button class="btn primary">Search</button>
+    <span class="muted">{{ total }} {{ ("match" if total == 1 else "matches") if q else "entries" }}{% if total > limit %}; the first {{ limit }} shown{% endif %}</span>
+  </form>
+</div>
+<div class="card flush"><div class="tbl"><table>
+<tr><th>Manufacturer</th><th>Image type</th><th>Version</th><th>Model</th><th>File</th><th class="num">Size</th><th>Sources</th><th></th></tr>
 {% for e in entries %}
 <tr>
-<td class="mono">{{ e.manufacturerCode | hex4 }}</td>
-<td class="mono">{{ e.imageType | hex4 }}</td>
-<td class="mono">{{ e.fileVersion | hex8 }}</td>
-<td>{{ e.modelId or "" }}{% if e.manufacturerName %} <span class="muted">{{ e.manufacturerName | join(", ") }}</span>{% endif %}</td>
-<td><a href="{{ e.url }}">{{ e.fileName }}</a></td>
-<td>{{ e.fileSize }}</td>
-<td>{{ e.sources | join(", ") }}</td>
-<td>{{ (e.rules or []) | join(", ") }}</td>
-<td><a href="/images/{{ e.sha512 }}">Hold, drop or edit</a></td>
+  <td class="mono">{{ e.manufacturerCode | hex4 }}</td>
+  <td class="mono">{{ e.imageType | hex4 }}</td>
+  <td class="mono">{{ e.fileVersion | hex8 }}</td>
+  <td>{{ e.modelId or "" }}{% if e.manufacturerName %}<div class="muted">{{ e.manufacturerName | join(", ") }}</div>{% endif %}</td>
+  <td class="file"><a href="{{ e.url }}">{{ e.fileName }}</a>{% if e.rules %}<div>{% for r in e.rules %}<span class="tag">{{ r }}</span>{% endfor %}</div>{% endif %}</td>
+  <td class="num">{{ "%.0f" | format(e.fileSize / 1024) }} KB</td>
+  <td>{% for s in e.sources %}<span class="tag">{{ s }}</span>{% endfor %}</td>
+  <td class="end"><a class="btn small" href="/images/{{ e.sha512 }}">Manage</a></td>
 </tr>
+{% else %}
+<tr><td colspan="8" class="empty">{% if q %}Nothing matches.{% else %}Nothing published yet.{% endif %}</td></tr>
 {% endfor %}
-</table>
-</div>
-{% for title, items in [("Held", report.held), ("Dropped", report.dropped), ("Waiting", report.waiting)] %}
-{% if items %}<h2>{{ title }} in the last run ({{ items | length }})</h2><ul class="mono">{% for i in items[:200] %}<li>{{ i }}</li>{% endfor %}</ul>{% endif %}
-{% endfor %}
-{% if report.failures %}<h2>Failed checks in the last run ({{ report.failures | length }})</h2><ul class="mono">{% for f in report.failures %}<li>{{ f.entry }}: {{ f.reason }}</li>{% endfor %}</ul>{% endif %}
-<p class="muted">A held or dropped image is released by switching its rule off on the Rules page.</p>
+</table></div></div>
+{{ m.report_lists(report) }}
+<p class="hint">A held or dropped image comes back when its rule is switched off on the Rules page.</p>
 {% endblock %}

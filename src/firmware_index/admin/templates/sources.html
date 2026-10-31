@@ -1,29 +1,56 @@
 {% extends "base.html" %}
 {% block content %}
-<h1>Sources</h1>
-<p class="muted">Lower priority wins a clash. A new entry waits its source's delay in days. Changes apply from the next run.</p>
+<div class="head">
+  <div><h1>Sources</h1><p>Where a run gets its files. A lower priority wins when two sources list different files for one device. A new entry waits its source's delay before it is published. Changes apply from the next run.</p></div>
+</div>
+<div class="cards">
 {% for s in sources %}
-<fieldset>
-<legend><strong>{{ s.name }}</strong> <span class="muted">{{ s.type }}</span></legend>
-<p class="muted">Last good read {{ s.last_ok or "never" }}{% if s.last_error %}; failing: {{ s.last_error }}{% endif %}; {{ s.candidates }} entries kept.</p>
-<form method="post" action="/sources/{{ s.name }}">
-<input type="hidden" name="type" value="{{ s.type }}">
-<label>Priority <input type="number" name="priority" value="{{ s.priority }}"></label>
-<label>Delay <input type="number" name="delay_days" min="0" value="{{ s.delay_days }}"></label>
-<label><input type="checkbox" name="enabled" value="1" {% if s.enabled %}checked{% endif %}> On</label>
-<textarea name="config">{{ s.config }}</textarea>
-<button>Save</button>
-</form>
-</fieldset>
+<div class="card">
+  <h3><span>{{ s.name }} <span class="count">{{ {"index": "community index format", "zigpy": "zigpy provider", "upload": "our uploads"}[s.type] }}</span></span>
+  {% if not s.enabled %}<span class="pill info">Off</span>{% elif s.last_error %}<span class="pill offline">Failing</span>{% elif s.last_ok %}<span class="pill online">OK</span>{% else %}<span class="pill info">Not read yet</span>{% endif %}</h3>
+  <div class="about">
+    <div class="k">Last good read</div><div class="v">{{ s.last_ok | when or "Never" }}</div>
+    <div class="k">Entries</div><div class="v">{{ s.candidates }}</div>
+    {% if s.last_error %}<div class="k">Error</div><div class="v">{{ s.last_error }}</div>{% endif %}
+  </div>
+  <form method="post" action="/sources/{{ s.name }}" class="split">
+    <input type="hidden" name="type" value="{{ s.type }}">
+    <div class="fields">
+      <div class="field"><label>Priority</label><input type="number" name="priority" value="{{ s.priority }}"></div>
+      <div class="field"><label>Delay (days)</label><input type="number" name="delay_days" min="0" value="{{ s.delay_days }}"></div>
+      {% if s.type == "index" %}<div class="field full"><label>URL</label><input type="url" name="url" value="{{ s.config.url }}"></div>{% endif %}
+      {% if s.type == "zigpy" %}
+      <div class="field"><label>Provider</label><select name="provider">{% for k, v in providers.items() %}<option value="{{ k }}"{% if k == s.config.provider %} selected{% endif %}>{{ v }}</option>{% endfor %}</select></div>
+      {% if s.config.provider == "zigpy_ota" %}<div class="field"><label>Channel</label><select name="channel">{% for c in channels %}<option{% if c == s.config.channel %} selected{% endif %}>{{ c }}</option>{% endfor %}</select></div>{% endif %}
+      {% endif %}
+      <label class="check"><input type="checkbox" name="enabled" value="1"{% if s.enabled %} checked{% endif %}> On</label>
+      <button class="btn">Save</button>
+    </div>
+  </form>
+</div>
 {% endfor %}
-<h2>Add a source</h2>
-<form method="post" action="/sources">
-<label>Name <input type="text" name="name" required></label>
-<label>Type <select name="type">{% for t in types %}<option>{{ t }}</option>{% endfor %}</select></label>
-<label>Priority <input type="number" name="priority" value="10"></label>
-<label>Delay <input type="number" name="delay_days" min="0" value="7"></label>
-<label><input type="checkbox" name="enabled" value="1" checked> On</label>
-<textarea name="config" placeholder='{"url": "https://..."} or {"provider": "sonoff"}'></textarea>
-<button>Add</button>
-</form>
+</div>
+<div class="card">
+  <h3>Add a source</h3>
+  <form method="post" action="/sources">
+    <div class="fields">
+      <div class="field"><label>Name</label><input type="text" name="name" required></div>
+      <div class="field mid"><label>Type</label><select name="type" id="kind">
+        <option value="index">Community index format</option><option value="zigpy">zigpy provider</option></select></div>
+      <div class="field wide" data-for="index"><label>Index URL</label><input type="url" name="url" placeholder="https://..."></div>
+      <div class="field" data-for="zigpy" hidden><label>Provider</label><select name="provider">{% for k, v in providers.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select></div>
+      <div class="field" data-for="zigpy" hidden><label>Channel</label><select name="channel">{% for c in channels %}<option>{{ c }}</option>{% endfor %}</select></div>
+      <div class="field"><label>Priority</label><input type="number" name="priority" value="10"></div>
+      <div class="field"><label>Delay (days)</label><input type="number" name="delay_days" min="0" value="7"></div>
+      <label class="check"><input type="checkbox" name="enabled" value="1" checked> On</label>
+      <button class="btn primary">Add</button>
+    </div>
+    <p class="hint" data-for="zigpy" hidden>The channel applies to zigpy-ota only.</p>
+  </form>
+</div>
+<script>
+var kind = document.getElementById("kind");
+function showKind() { document.querySelectorAll("[data-for]").forEach(function (el) { el.hidden = el.dataset.for !== kind.value; }); }
+kind.addEventListener("change", showKind); showKind();
+</script>
 {% endblock %}

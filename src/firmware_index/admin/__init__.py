@@ -30,8 +30,46 @@ RULE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 SHA512 = re.compile(r"^[0-9a-f]{128}$")
 
 TEMPLATES = Jinja2Templates(directory=Path(__file__).parent / "templates")
-TEMPLATES.env.filters["hex4"] = lambda n: "" if n is None else f"0x{n:04X}"
-TEMPLATES.env.filters["hex8"] = lambda n: "" if n is None else f"0x{n:08X}"
+TEMPLATES.env.filters["hex4"] = lambda n: f"0x{n:04X}" if isinstance(n, int) else ""
+TEMPLATES.env.filters["hex8"] = lambda n: f"0x{n:08X}" if isinstance(n, int) else ""
+TEMPLATES.env.filters["when"] = lambda t: t.replace("T", " ")[:16] + " UTC" if t else ""
+
+# zigpy's providers that list files on their own (its other types read a folder or a set URL).
+PROVIDERS = {"zigpy_ota": "zigpy-ota", "ledvance": "Ledvance", "sonoff": "Sonoff", "ikea": "IKEA"}
+CHANNELS = ["stable", "beta", "dev"]
+HEX4 = {"manufacturerCode", "imageType", "manufacturer", "image_type"}
+HEX8 = {"fileVersion", "version", "minFileVersion", "maxFileVersion", "min_file_version"}
+HEX8 |= {"max_file_version"}
+SHAS = {"sha512", "upstreamSha512"}
+
+
+def show(key: str, value) -> str:
+    """A stored value as the page shows it: codes in hex, lists joined, long text cut short."""
+    if isinstance(value, bool):
+        return "yes" if value else "no"
+    if isinstance(value, dict) and value and set(value) <= {"min", "max"}:
+        low = show(key, value["min"]) if "min" in value else "any"
+        high = show(key, value["max"]) if "max" in value else "any"
+        return f"{low} to {high}"
+    if isinstance(value, dict):
+        return ", ".join(f"{k} {v}" for k, v in pairs(value))
+    if isinstance(value, int) and key in HEX4:
+        return f"0x{value:04X}"
+    if isinstance(value, int) and key in HEX8:
+        return f"0x{value:08X}"
+    if isinstance(value, list):
+        return ", ".join(str(v) for v in value)
+    if isinstance(value, str) and key in SHAS:
+        return value[:16] + "..."
+    text = value if isinstance(value, str) else json.dumps(value)
+    return text if len(text) <= 80 else text[:77] + "..."
+
+
+def pairs(d: dict | None) -> list[tuple[str, str]]:
+    return [(k, show(k, v)) for k, v in (d or {}).items() if v not in (None, "", [], {})]
+
+
+TEMPLATES.env.filters["pairs"] = pairs
 
 
 class Refused(Exception):
@@ -90,17 +128,12 @@ def back(path: str, message: str) -> RedirectResponse:
 
 def optional_int(value: str | None) -> int | None:
     value = (value or "").strip()
-    return int(value, 0) if value else None
-
-
-def parse_json(value: str, what: str) -> dict:
+    if not value:
+        return None
     try:
-        parsed = json.loads(value or "{}")
-    except json.JSONDecodeError as e:
-        raise Refused(f"{what} is not JSON: {e.msg}") from None
-    if not isinstance(parsed, dict):
-        raise Refused(f"{what} must be a JSON object")
-    return parsed
+        return int(value, 0)
+    except ValueError:
+        raise Refused(f"{value!r} is not a number (decimal, or hex as 0x...)") from None
 
 
 async def healthz(request: Request) -> Response:
@@ -140,33 +173,50 @@ async def publish_now(request: Request) -> Response:
 
 async def sources_page(request: Request) -> Response:
     rows = open_db(request).execute("SELECT * FROM sources ORDER BY priority").fetchall()
+    shown = [
+        {
+            **dict(r),
+            "config": json.loads(r["config"]),
+            "candidates": len(json.loads(r["last_candidates"] or "[]")),
+        }
+        for r in rows
+    ]
     return page(
         request,
         "sources.html",
-        sources=[
-            {**dict(r), "candidates": len(json.loads(r["last_candidates"] or "[]"))} for r in rows
-        ],
+        sources=shown,
         types=[sources.INDEX, sources.ZIGPY, sources.UPLOAD],
+        providers=PROVIDERS,
+        channels=CHANNELS,
     )
 
 
 def source_fields(form) -> dict:
     kind = form.get("type")
-    config = parse_json(form.get("config", ""), "Config")
-    if kind == sources.INDEX and not str(config.get("url", "")).startswith("https://"):
-        raise Refused('An index source needs {"url": "https://..."}')
-    if kind == sources.ZIGPY:
-        import zigpy.ota.providers
-
-        if config.get("provider") not in zigpy.ota.providers.OTA_PROVIDER_TYPES:
-            raise Refused('A zigpy source needs {"provider": ...} naming one of zigpy\'s providers')
-    if kind not in (sources.INDEX, sources.ZIGPY, sources.UPLOAD):
+    if kind == sources.INDEX:
+        url = (form.get("url") or "").strip()
+        if not url.startswith("https://"):
+            raise Refused("An index source needs an https:// URL")
+        config = {"url": url}
+    elif kind == sources.ZIGPY:
+        provider = form.get("provider")
+        if provider not in PROVIDERS:
+            raise Refused("Choose one of zigpy's providers")
+        config = {"provider": provider}
+        if provider == "zigpy_ota":
+            channel = form.get("channel") or "stable"
+            if channel not in CHANNELS:
+                raise Refused(f"Unknown channel {channel!r}")
+            config["channel"] = channel
+    elif kind == sources.UPLOAD:
+        config = {}
+    else:
         raise Refused(f"Unknown type {kind!r}")
     return {
         "type": kind,
         "config": json.dumps(config),
-        "priority": int(form.get("priority", "10")),
-        "delay_days": int(form.get("delay_days", "0")),
+        "priority": optional_int(form.get("priority")) or 10,
+        "delay_days": optional_int(form.get("delay_days")) or 0,
         "enabled": int(form.get("enabled") == "1"),
     }
 
@@ -219,6 +269,9 @@ def search_text(e: dict) -> str:
         e.get("modelId") or "",
         " ".join(e.get("manufacturerName") or []),
         " ".join(e.get("sources") or []),
+        e.get("originalUrl") or "",
+        e.get("otaHeaderString") or "",
+        e.get("releaseNotes") or "",
     ]
     return " ".join(parts).lower()
 
@@ -284,27 +337,60 @@ def save_rule(db, who: str, rule: rules.Rule) -> None:
     )
 
 
+def set_fields(form) -> dict:
+    """The set fields a form fills in, named s_<field>."""
+    fields = {}
+    for name in rules.SETTABLE:
+        value = (form.get(f"s_{name}") or "").strip()
+        if not value:
+            continue
+        if name == "manufacturerName":
+            fields[name] = [v.strip() for v in value.split(",") if v.strip()]
+        elif name in ("releaseNotes", "modelId", "otaHeaderString"):
+            fields[name] = value
+        else:
+            fields[name] = optional_int(value)
+    if not fields:
+        raise Refused("Give at least one field to set")
+    return fields
+
+
+def match_fields(form) -> dict:
+    """What a rule matches, from fields named m_<key>."""
+    match = {}
+    sha = (form.get("m_sha512") or "").strip().lower()
+    if sha:
+        if not SHA512.match(sha):
+            raise Refused("A sha512 is 128 hex digits")
+        match["sha512"] = sha
+    if form.get("m_source"):
+        match["source"] = form.get("m_source")
+    for key in ("manufacturerCode", "imageType"):
+        value = optional_int(form.get(f"m_{key}"))
+        if value is not None:
+            match[key] = value
+    low, high = optional_int(form.get("m_versionMin")), optional_int(form.get("m_versionMax"))
+    if low is not None and low == high:
+        match["fileVersion"] = low
+    elif low is not None or high is not None:
+        match["fileVersion"] = {k: v for k, v in (("min", low), ("max", high)) if v is not None}
+    for key in ("modelId", "url"):
+        value = (form.get(f"m_{key}") or "").strip()
+        if value:
+            match[key] = value
+    if not match:
+        raise Refused("Give at least one thing to match; for every file, use the URL pattern *")
+    return match
+
+
 async def image_rule(request: Request) -> Response:
     sha = request.path_params["sha"]
     if not SHA512.match(sha):
         return PlainTextResponse("Not a sha512", 400)
     form = await request.form()
     action = form.get("action")
-    fields = {}
     try:
-        if action == rules.SET:
-            for name in rules.SETTABLE:
-                value = (form.get(name) or "").strip()
-                if not value:
-                    continue
-                if name == "manufacturerName":
-                    fields[name] = [v.strip() for v in value.split(",") if v.strip()]
-                elif name in ("releaseNotes", "modelId", "otaHeaderString"):
-                    fields[name] = value
-                else:
-                    fields[name] = int(value, 0)
-            if not fields:
-                raise Refused("Give at least one field to set")
+        fields = set_fields(form) if action == rules.SET else {}
         db = open_db(request)
         rule = rules.Rule(
             id=new_rule_id(db, f"{action}-{sha[:12]}"),
@@ -320,12 +406,21 @@ async def image_rule(request: Request) -> Response:
 
 
 async def rules_page(request: Request) -> Response:
-    rows = open_db(request).execute("SELECT * FROM rules ORDER BY created, id").fetchall()
+    db = open_db(request)
+    rows = db.execute("SELECT * FROM rules ORDER BY created, id").fetchall()
     shown = [
         {**dict(r), "match": json.loads(r["match"]), "set": json.loads(r["set_fields"])}
         for r in rows
     ]
-    return page(request, "rules.html", rules=shown, actions=[rules.DROP, rules.HOLD, rules.SET])
+    names = [r["name"] for r in db.execute("SELECT name FROM sources ORDER BY priority")]
+    return page(
+        request,
+        "rules.html",
+        rules=shown,
+        actions=[rules.HOLD, rules.DROP, rules.SET],
+        sources=names,
+        settable=list(rules.SETTABLE),
+    )
 
 
 async def add_rule(request: Request) -> Response:
@@ -337,14 +432,12 @@ async def add_rule(request: Request) -> Response:
             raise Refused("An id is letters, digits, dots, dashes and underscores")
         if db.execute("SELECT 1 FROM rules WHERE id = ?", (rid,)).fetchone():
             raise Refused(f"A rule {rid} exists")
-        match = parse_json(form.get("match", ""), "Match")
-        if not match:
-            raise Refused('A rule needs a Match; for every file, say {"url": "*"}')
+        action = form.get("action")
         rule = rules.Rule(
             id=rid,
-            action=form.get("action"),
-            match=match,
-            set=parse_json(form.get("set", ""), "Set"),
+            action=action,
+            match=match_fields(form),
+            set=set_fields(form) if action == rules.SET else {},
             note=(form.get("note") or "").strip(),
         )
     except (Refused, ValueError) as e:
@@ -485,8 +578,8 @@ async def save_upload(request: Request) -> Response:
             "release_notes": (form.get("release_notes") or "").strip() or None,
             "original_url": (form.get("original_url") or "").strip() or None,
         }
-    except ValueError as e:
-        return back("/uploads", f"A number did not parse: {e}")
+    except Refused as e:
+        return back("/uploads", str(e))
     name = sources.file_name(
         form.get("file_name") or "", img.manufacturer, img.image_type, img.version
     )
@@ -520,7 +613,8 @@ async def delete_upload(request: Request) -> Response:
 
 async def audit_page(request: Request) -> Response:
     rows = open_db(request).execute("SELECT * FROM audit ORDER BY id DESC LIMIT 200").fetchall()
-    return page(request, "audit.html", rows=rows)
+    shown = [{**dict(r), "detail": json.loads(r["detail"])} for r in rows]
+    return page(request, "audit.html", rows=shown)
 
 
 def create_app(

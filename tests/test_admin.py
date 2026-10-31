@@ -78,17 +78,15 @@ def test_publish_now_and_anyway_start_a_job_and_are_audited(admin):
 def test_sources_are_listed_added_checked_and_edited(admin):
     page = admin.get("/sources").text
     assert "zigpy-ota" in page and "community" in page
-    bad = admin.post(
-        "/sources", data={"name": "x", "type": "index", "config": '{"url": "ftp://x"}'}
-    )
-    assert "needs" in message(bad)
-    bad = admin.post(
-        "/sources", data={"name": "x", "type": "zigpy", "config": '{"provider": "nope"}'}
-    )
+    bad = admin.post("/sources", data={"name": "x", "type": "index", "url": "ftp://x"})
+    assert "needs+an+https" in message(bad)
+    bad = admin.post("/sources", data={"name": "x", "type": "zigpy", "provider": "advanced"})
     assert "zigpy" in message(bad)
-    bad = admin.post("/sources", data={"name": "x", "type": "index", "config": "[]"})
-    assert "Config+must+be+a+JSON+object" in message(bad)
-    good = {"name": "vendor", "type": "index", "config": '{"url": "https://v.test/i.json"}'}
+    bad = admin.post(
+        "/sources", data={"name": "x", "type": "index", "url": "https://v.test", "priority": "x"}
+    )
+    assert "is+not+a+number" in message(bad)
+    good = {"name": "vendor", "type": "index", "url": "https://v.test/i.json"}
     assert "Added+vendor" in message(admin.post("/sources", data={**good, "priority": "7"}))
     admin.post(
         "/sources/vendor",
@@ -96,7 +94,16 @@ def test_sources_are_listed_added_checked_and_edited(admin):
     )
     row = admin.db.execute("SELECT * FROM sources WHERE name = 'vendor'").fetchone()
     assert (row["priority"], row["delay_days"], row["enabled"]) == (8, 3, 1)
-    assert audit(admin) == ["source.add", "source.edit"]
+    assert json.loads(row["config"]) == {"url": "https://v.test/i.json"}
+    beta = {"name": "beta", "type": "zigpy", "provider": "zigpy_ota", "channel": "beta"}
+    admin.post("/sources", data=beta)
+    row = admin.db.execute("SELECT config FROM sources WHERE name = 'beta'").fetchone()
+    assert json.loads(row["config"]) == {"provider": "zigpy_ota", "channel": "beta"}
+    sonoff = {"name": "s2", "type": "zigpy", "provider": "sonoff", "channel": "beta"}
+    admin.post("/sources", data=sonoff)
+    row = admin.db.execute("SELECT config FROM sources WHERE name = 's2'").fetchone()
+    assert json.loads(row["config"]) == {"provider": "sonoff"}
+    assert audit(admin) == ["source.add", "source.edit", "source.add", "source.add"]
 
 
 def publish_entries(admin, entries):
@@ -133,7 +140,7 @@ def test_images_search_and_each_action_makes_a_rule(admin):
     admin.post(f"/images/{a}/rule", data={"action": "hold"})
     admin.post(
         f"/images/{b}/rule",
-        data={"action": "set", "hardwareVersionMin": "0x01", "manufacturerName": "A, B"},
+        data={"action": "set", "s_hardwareVersionMin": "0x01", "s_manufacturerName": "A, B"},
     )
     assert admin.post("/images/..%2Fx/rule", data={"action": "hold"}).status_code in (400, 404)
     assert admin.post(f"/images/{'A' * 128}/rule", data={"action": "hold"}).status_code == 400
@@ -150,22 +157,44 @@ def test_images_search_and_each_action_makes_a_rule(admin):
 
 
 def test_rules_are_added_checked_switched_deleted_and_downloaded(admin):
-    bad = admin.post("/rules", data={"id": "r1", "action": "hold", "match": "{"})
-    assert "not+JSON" in message(bad)
-    bad = admin.post("/rules", data={"id": "r1", "action": "hold", "match": '{"colour": 1}'})
-    assert "unknown+match+key" in message(bad)
-    blank = admin.post("/rules", data={"id": "r1", "action": "set", "set": '{"modelId": "M"}'})
-    assert "needs+a+Match" in message(blank)
-    listed = admin.post("/rules", data={"id": "r1", "action": "hold", "match": "[]"})
-    assert "Match+must+be+a+JSON+object" in message(listed)
-    listed = admin.post(
-        "/rules", data={"id": "r1", "action": "set", "match": '{"imageType": 1}', "set": "[]"}
-    )
-    assert "Set+must+be+a+JSON+object" in message(listed)
+    bad = admin.post("/rules", data={"id": "r1", "action": "hold"})
+    assert "at+least+one+thing+to+match" in message(bad)
+    bad = admin.post("/rules", data={"id": "r1", "action": "hold", "m_imageType": "one"})
+    assert "is+not+a+number" in message(bad)
+    bad = admin.post("/rules", data={"id": "r1", "action": "hold", "m_sha512": "abc"})
+    assert "128+hex+digits" in message(bad)
+    bad = admin.post("/rules", data={"id": "r1", "action": "set", "m_imageType": "1"})
+    assert "at+least+one+field+to+set" in message(bad)
     assert admin.db.execute("SELECT COUNT(*) FROM rules").fetchone()[0] == 0
-    good = {"id": "r1", "action": "set", "match": '{"imageType": 1}', "set": '{"modelId": "M"}'}
+    good = {"id": "r1", "action": "set", "m_imageType": "1", "s_modelId": "M"}
     assert "Added+rule+r1" in message(admin.post("/rules", data=good))
     assert "exists" in message(admin.post("/rules", data=good))
+    ranged = {
+        "id": "r2",
+        "action": "hold",
+        "m_source": "community",
+        "m_manufacturerCode": "0x1234",
+        "m_versionMin": "0x10",
+        "m_versionMax": "0x20",
+        "m_url": "*/Vendor/*",
+        "s_modelId": "ignored for a hold",
+    }
+    admin.post("/rules", data=ranged)
+    one = {"id": "r3", "action": "drop", "m_versionMin": "0x10", "m_versionMax": "0x10"}
+    admin.post("/rules", data=one)
+    rows = {r["id"]: r for r in admin.db.execute("SELECT * FROM rules")}
+    assert json.loads(rows["r2"]["match"]) == {
+        "source": "community",
+        "manufacturerCode": 0x1234,
+        "fileVersion": {"min": 0x10, "max": 0x20},
+        "url": "*/Vendor/*",
+    }
+    assert json.loads(rows["r2"]["set_fields"]) == {}
+    assert json.loads(rows["r3"]["match"]) == {"fileVersion": 0x10}
+    page = admin.get("/rules").text
+    assert "0x1234" in page and "0x00000010 to 0x00000020" in page
+    admin.post("/rules/r2/delete")
+    admin.post("/rules/r3/delete")
 
     admin.post("/rules/r1/toggle")
     assert admin.db.execute("SELECT enabled FROM rules").fetchone()[0] == 0
@@ -174,7 +203,15 @@ def test_rules_are_added_checked_switched_deleted_and_downloaded(admin):
     assert rule["enabled"] is False
     admin.post("/rules/r1/delete")
     assert admin.db.execute("SELECT COUNT(*) FROM rules").fetchone()[0] == 0
-    assert audit(admin) == ["rule.add", "rule.toggle", "rule.delete"]
+    assert audit(admin) == [
+        "rule.add",
+        "rule.add",
+        "rule.add",
+        "rule.delete",
+        "rule.delete",
+        "rule.toggle",
+        "rule.delete",
+    ]
 
 
 def test_an_upload_is_checked_cut_to_its_image_and_saved(admin):
@@ -184,7 +221,7 @@ def test_an_upload_is_checked_cut_to_its_image_and_saved(admin):
         "/uploads/check", files={"file": ("vendor fw.ota", io.BytesIO(wrapped))}
     ).text
     sha = hashlib.sha512(core).hexdigest()
-    assert sha in checked and "cut to the OTA image" in checked
+    assert sha in checked and "cut to its OTA image" in checked
     assert "1234-0001-00000030.ota" in checked
 
     saved = admin.post(

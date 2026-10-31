@@ -1,28 +1,32 @@
 {% extends "base.html" %}
 {% block content %}
-<h1>Uploads</h1>
-<p class="muted">Our own files. Each is checked and cut to its OTA image before it is saved, and goes out on the next run.</p>
-<form method="post" action="/uploads/check" enctype="multipart/form-data">
-<p><label>File <input type="file" name="file"></label></p>
-<p><label>or URL <input type="url" name="url" size="60"></label></p>
-<button>Check</button>
-</form>
-<div class="wide">
-<table>
-<tr><th>File</th><th>Manufacturer</th><th>Image type</th><th>Version</th><th>Model</th><th>By</th><th></th></tr>
+<div class="head">
+  <div><h1>Uploads</h1><p>Our own files, such as firmware a vendor sends us. Each is checked and cut to its OTA image before it is saved, and goes out on the next run.</p></div>
+</div>
+<div class="card">
+  <h3>Add a file</h3>
+  <form method="post" action="/uploads/check" enctype="multipart/form-data">
+    <div class="fields">
+      <div class="field wide"><label>File</label><input type="file" name="file"></div>
+      <div class="field wide"><label>Or a URL</label><input type="url" name="url" placeholder="https://..."></div>
+      <button class="btn primary">Check</button>
+    </div>
+  </form>
+</div>
+<div class="card flush"><h3>Uploaded <span class="count">{{ uploads | length }}</span></h3><div class="tbl"><table>
+<tr><th>File</th><th>Manufacturer</th><th>Image type</th><th>Version</th><th>Model</th><th>Added</th><th></th></tr>
 {% for u in uploads %}
 <tr>
-<td>{{ u.file_name }}<br><span class="mono muted">{{ u.sha512[:16] }}</span></td>
-<td class="mono">{{ u.fields.manufacturer | hex4 }}</td>
-<td class="mono">{{ u.fields.image_type | hex4 }}</td>
-<td class="mono">{{ u.fields.version | hex8 }}</td>
-<td>{{ u.fields.model_id or "" }}</td>
-<td>{{ u.author }}<br><span class="muted">{{ u.created }}</span></td>
-<td><form class="inline" method="post" action="/uploads/{{ u.sha512 }}/delete"><button>Delete</button></form></td>
+  <td>{{ u.file_name }}<div class="muted mono">{{ u.sha512[:16] }}</div></td>
+  <td class="mono">{{ u.fields.manufacturer | hex4 }}</td>
+  <td class="mono">{{ u.fields.image_type | hex4 }}</td>
+  <td class="mono">{{ u.fields.version | hex8 }}</td>
+  <td>{{ u.fields.model_id or "" }}</td>
+  <td class="muted">{{ u.author }}<br>{{ u.created | when }}</td>
+  <td class="end"><form class="inline" method="post" action="/uploads/{{ u.sha512 }}/delete"><button class="btn small danger">Delete</button></form></td>
 </tr>
 {% else %}
-<tr><td colspan="7" class="muted">No uploads.</td></tr>
+<tr><td colspan="7" class="empty">No uploads.</td></tr>
 {% endfor %}
-</table>
-</div>
+</table></div></div>
 {% endblock %}

@@ -5,42 +5,132 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{% block title %}Firmware index{% endblock %}</title>
 <style>
-:root { color-scheme: light dark; --fg: #1d1d1f; --bg: #fff; --muted: #6e6e73; --line: #d2d2d7; --note: #f2f6ff; }
-@media (prefers-color-scheme: dark) { :root { --fg: #f5f5f7; --bg: #111; --muted: #a1a1a6; --line: #3a3a3c; --note: #1c2333; } }
-body { font: 15px/1.45 system-ui, sans-serif; color: var(--fg); background: var(--bg); margin: 0; }
-header { display: flex; flex-wrap: wrap; gap: 1rem; align-items: baseline; padding: 0.75rem 1rem; border-bottom: 1px solid var(--line); }
-header strong { margin-right: 1rem; }
-header .who { margin-left: auto; color: var(--muted); }
-main { padding: 1rem; max-width: 72rem; }
-a { color: inherit; }
-table { border-collapse: collapse; width: 100%; margin: 0.5rem 0 1.5rem; }
-th, td { text-align: left; padding: 0.3rem 0.5rem; border-bottom: 1px solid var(--line); vertical-align: top; }
-th { font-weight: 600; }
-code, .mono { font-family: ui-monospace, monospace; font-size: 0.9em; }
-.muted { color: var(--muted); }
-.note { background: var(--note); padding: 0.5rem 0.75rem; border-radius: 6px; }
+:root {
+  --bg: #f5f5f7; --surface: #ffffff; --surface-hover: #f7f8fa; --nest: #f0f2f6;
+  --border: #d1d5db; --line: #e5e7eb; --text: #1a1a1a; --text-muted: #6b7280;
+  --accent: #2563eb; --accent-hover: #1d4ed8; --danger: #dc2626;
+  --radius: 6px; --shadow: 0 1px 3px rgba(0,0,0,0.08);
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+[hidden] { display: none !important; }
+body { font-family: var(--font); background: var(--bg); color: var(--text); font-size: 13px; line-height: 1.5; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+code, .mono { font-family: var(--mono); font-size: 12px; }
+.muted { color: var(--text-muted); }
+
+.top { background: var(--surface); border-bottom: 1px solid var(--border); box-shadow: var(--shadow); position: sticky; top: 0; z-index: 5; }
+.top .in { display: flex; align-items: stretch; gap: 4px; max-width: 1180px; margin: 0 auto; padding: 0 20px; }
+.brand { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; padding-right: 18px; white-space: nowrap; }
+.brand .dot { width: 10px; height: 10px; border-radius: 3px; background: var(--accent); }
+.tab { display: flex; align-items: center; padding: 12px 14px; border-bottom: 2px solid transparent; color: var(--text-muted); font-weight: 500; }
+.tab:hover { color: var(--text); text-decoration: none; }
+.tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.who { margin-left: auto; display: flex; align-items: center; color: var(--text-muted); font-size: 12px; }
+
+main { max-width: 1180px; margin: 0 auto; padding: 20px; }
+.head { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin-bottom: 14px; }
+.head h1 { font-size: 18px; font-weight: 600; display: flex; align-items: center; gap: 10px; }
+.head p { color: var(--text-muted); font-size: 12px; margin-top: 2px; max-width: 680px; }
+.actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; margin-bottom: 14px; box-shadow: var(--shadow); }
+.card h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); margin-bottom: 10px; font-weight: 600; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.card h3 .count { text-transform: none; letter-spacing: 0; font-weight: 400; }
+.card.flush { padding: 0; overflow: hidden; }
+.card.flush > h3 { padding: 14px 14px 0; }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 14px; margin-bottom: 14px; }
+.cards .card { margin-bottom: 0; }
+
+.note { background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; border-radius: var(--radius); padding: 9px 12px; margin-bottom: 14px; }
+
+.pill { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 999px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+.pill::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.pill.online { background: #dcfce7; color: #15803d; }
+.pill.pending { background: #fef3c7; color: #b45309; }
+.pill.offline { background: #fee2e2; color: #b91c1c; }
+.pill.info { background: #f1f5f9; color: #475569; }
+.pill.blue { background: #dbeafe; color: #1e40af; }
+.tag { display: inline-block; font-size: 11px; color: #374151; background: var(--nest); border: 1px solid var(--line); border-radius: 4px; padding: 0 6px; margin: 1px 3px 1px 0; white-space: nowrap; }
+.tag b { font-weight: 500; color: var(--text-muted); margin-right: 4px; }
+.tag.long { white-space: normal; overflow-wrap: anywhere; }
+
+.stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+.stat { border: 1px solid var(--line); border-radius: var(--radius); padding: 9px 11px; background: var(--bg); }
+.stat .k { font-size: 11px; color: var(--text-muted); }
+.stat .v { font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums; margin-top: 1px; overflow-wrap: anywhere; }
+.stat .v.small { font-size: 12px; font-weight: 500; margin-top: 4px; }
+
+.about { display: grid; grid-template-columns: max-content 1fr; gap: 5px 18px; align-items: baseline; }
+.about .k { color: var(--text-muted); font-size: 11px; white-space: nowrap; }
+.about .v { font-size: 12px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+
+.tbl { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; }
+th { text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-muted); font-weight: 600; padding: 8px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+td { padding: 8px 10px; border-top: 1px solid var(--line); vertical-align: middle; font-variant-numeric: tabular-nums; }
+tr:hover td { background: var(--surface-hover); }
+th.num, td.num { text-align: right; white-space: nowrap; }
+td.file { max-width: 340px; overflow-wrap: anywhere; }
+td.empty { color: var(--text-muted); text-align: center; padding: 24px; }
+td.nowrap { white-space: nowrap; }
+td.end { text-align: right; white-space: nowrap; }
+
+.btn { display: inline-flex; align-items: center; gap: 6px; font: inherit; font-size: 12px; font-weight: 500; padding: 5px 12px; border-radius: 5px; border: 1px solid var(--border); background: var(--surface); color: var(--text); cursor: pointer; white-space: nowrap; }
+.btn:hover { background: var(--surface-hover); text-decoration: none; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn.primary:hover { background: var(--accent-hover); }
+.btn.danger { color: var(--danger); border-color: #f0c4c4; }
+.btn.danger:hover { background: #fef2f2; }
+.btn.small { padding: 2px 9px; font-size: 11px; }
 form.inline { display: inline; }
-input[type=text], input[type=url], input[type=number], textarea, select { font: inherit; padding: 0.2rem 0.3rem; }
-textarea { width: 100%; min-height: 3rem; font-family: ui-monospace, monospace; }
-fieldset { border: 1px solid var(--line); border-radius: 6px; margin: 1rem 0; }
-.wide { overflow-x: auto; }
-.break { word-break: break-all; min-width: 10rem; }
-pre { white-space: pre-wrap; word-break: break-all; }
+
+.fields { display: flex; flex-wrap: wrap; gap: 12px 14px; align-items: flex-end; }
+.field { display: flex; flex-direction: column; gap: 3px; flex: 0 1 150px; min-width: 110px; }
+.field.wide { flex: 1 1 280px; }
+.field.mid { flex: 0 1 210px; }
+.field.full { flex: 1 1 100%; }
+.field label, .lbl { font-size: 10px; text-transform: uppercase; letter-spacing: 0.3px; color: var(--text-muted); font-weight: 600; }
+.check { display: flex; align-items: center; gap: 6px; font-size: 12px; padding-bottom: 6px; }
+input[type=text], input[type=url], input[type=number], input[type=search], select, textarea { font: inherit; font-size: 12px; padding: 5px 8px; border: 1px solid var(--border); border-radius: 5px; background: var(--surface); color: var(--text); width: 100%; }
+textarea { min-height: 54px; resize: vertical; }
+input:focus, select:focus, textarea:focus { outline: 2px solid #bfdbfe; border-color: var(--accent); }
+.hint { font-size: 11px; color: var(--text-muted); margin-top: 8px; }
+.sub { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-muted); font-weight: 600; margin: 14px 0 8px; }
+.split { border-top: 1px solid var(--line); margin-top: 12px; padding-top: 12px; }
+
+details > summary { cursor: pointer; color: var(--text); font-weight: 500; font-size: 12px; list-style: none; }
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before { content: "\25B8"; display: inline-block; width: 14px; color: var(--text-muted); transition: transform .12s; }
+details[open] > summary::before { transform: rotate(90deg); }
+.list { margin-top: 10px; font-family: var(--mono); font-size: 11.5px; max-height: 320px; overflow-y: auto; border: 1px solid var(--line); border-radius: 5px; background: var(--nest); }
+.list div { padding: 4px 8px; border-top: 1px solid var(--line); }
+.list div:first-child { border-top: 0; }
+
+@media (max-width: 720px) {
+  .top .in { overflow-x: auto; padding: 0 12px; }
+  .who { display: none; }
+  main { padding: 14px 12px; }
+  .cards { grid-template-columns: 1fr; }
+}
 </style>
 </head>
 <body>
-<header>
-<strong>Firmware index</strong>
-<a href="/">Runs</a>
-<a href="/sources">Sources</a>
-<a href="/images">Images</a>
-<a href="/rules">Rules</a>
-<a href="/uploads">Uploads</a>
-<a href="/audit">Audit</a>
+{% set path = request.url.path %}
+<header class="top"><div class="in">
+<div class="brand"><span class="dot"></span>Firmware index</div>
+<a class="tab{% if path == '/' or path.startswith('/runs') %} active{% endif %}" href="/">Runs</a>
+<a class="tab{% if path.startswith('/sources') %} active{% endif %}" href="/sources">Sources</a>
+<a class="tab{% if path.startswith('/images') %} active{% endif %}" href="/images">Images</a>
+<a class="tab{% if path.startswith('/rules') %} active{% endif %}" href="/rules">Rules</a>
+<a class="tab{% if path.startswith('/uploads') %} active{% endif %}" href="/uploads">Uploads</a>
+<a class="tab{% if path.startswith('/audit') %} active{% endif %}" href="/audit">Audit</a>
 <span class="who">{{ user }}</span>
-</header>
+</div></header>
 <main>
-{% if message %}<p class="note">{{ message }}</p>{% endif %}
+{% if message %}<div class="note">{{ message }}</div>{% endif %}
 {% block content %}{% endblock %}
 </main>
 </body>

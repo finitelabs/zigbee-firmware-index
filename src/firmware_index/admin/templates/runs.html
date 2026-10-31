@@ -1,31 +1,39 @@
 {% extends "base.html" %}
+{% import "_macros.html" as m %}
 {% block content %}
-<h1>Runs</h1>
-<p>
-{% if published %}Published snapshot <code>{{ published.snapshot }}</code>, from the run at {{ published.at }}.{% else %}Nothing published yet.{% endif %}
-</p>
-<form class="inline" method="post" action="/publish"><input type="hidden" name="anyway" value="0"><button>Publish now</button></form>
-<form class="inline" method="post" action="/publish"><input type="hidden" name="anyway" value="1"><button>Publish anyway</button></form>
-<span class="muted">Publish anyway lets a run through the brake.</span>
-<div class="wide">
-<table>
-<tr><th>Run</th><th>Started</th><th>Status</th><th>Entries</th><th>Added</th><th>Removed</th><th>Failed</th><th>Held</th><th>Waiting</th><th>Alerts</th></tr>
-{% for r in runs %}
-<tr>
-<td><a href="/runs/{{ r.id }}">{{ r.id }}</a></td>
-<td>{{ r.started }}</td>
-<td>{{ r.status or "running" }}{% if r.anyway %} (anyway){% endif %}</td>
-<td>{{ r.report.counts.entries if r.report.counts }}</td>
-<td>{{ r.report.counts.added if r.report.counts }}</td>
-<td>{{ r.report.counts.removed if r.report.counts }}</td>
-<td>{{ r.report.counts.failed if r.report.counts }}</td>
-<td>{{ r.report.counts.held if r.report.counts }}</td>
-<td>{{ r.report.counts.waiting if r.report.counts }}</td>
-<td>{{ (r.report.alerts or []) | join("; ") }}</td>
-</tr>
-{% else %}
-<tr><td colspan="10" class="muted">No runs yet.</td></tr>
-{% endfor %}
-</table>
+{% set last = runs[0] if runs else None %}
+<div class="head">
+  <div><h1>Runs</h1><p>Each run reads the sources, checks every new file, applies the rules and publishes the index.</p></div>
+  <div class="actions">
+    <form class="inline" method="post" action="/publish"><input type="hidden" name="anyway" value="0"><button class="btn primary">Publish now</button></form>
+    <form class="inline" method="post" action="/publish" title="Publish even if the run would drop more than 5% of the index"><input type="hidden" name="anyway" value="1"><button class="btn">Publish anyway</button></form>
+  </div>
+</div>
+<div class="card">
+  <h3>Published</h3>
+  <div class="stats">
+    <div class="stat"><div class="k">Entries</div><div class="v">{{ last.report.counts.entries if last and last.report.counts else "-" }}</div></div>
+    <div class="stat"><div class="k">Waiting</div><div class="v">{{ last.report.counts.waiting if last and last.report.counts else "-" }}</div></div>
+    <div class="stat"><div class="k">Last run</div><div class="v small">{% if last %}{{ m.run_pill(last.status) }}{% else %}None yet{% endif %}</div></div>
+    <div class="stat" title="{{ published.snapshot if published }}"><div class="k">Published</div><div class="v small">{{ published.at | when if published else "Not yet" }}</div></div>
+  </div>
+</div>
+<div class="card flush">
+  <h3>Recent runs</h3>
+  <div class="tbl"><table>
+    <tr><th>Run</th><th>Started</th><th>Status</th><th class="num">Entries</th><th class="num">Added</th><th class="num">Removed</th><th class="num">Failed</th><th class="num">Held</th><th class="num">Waiting</th><th>Alerts</th></tr>
+    {% for r in runs %}{% set c = r.report.counts or {} %}
+    <tr>
+      <td><a href="/runs/{{ r.id }}">#{{ r.id }}</a></td>
+      <td class="nowrap">{{ r.started | when }}</td>
+      <td>{{ m.run_pill(r.status) }}{% if r.anyway %} <span class="tag">anyway</span>{% endif %}</td>
+      <td class="num">{{ c.entries }}</td><td class="num">{{ c.added }}</td><td class="num">{{ c.removed }}</td>
+      <td class="num">{{ c.failed }}</td><td class="num">{{ c.held }}</td><td class="num">{{ c.waiting }}</td>
+      <td class="muted">{{ (r.report.alerts or []) | join("; ") }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="10" class="empty">No runs yet. Publish now starts the first.</td></tr>
+    {% endfor %}
+  </table></div>
 </div>
 {% endblock %}

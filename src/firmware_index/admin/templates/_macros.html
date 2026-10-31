@@ -1,0 +1,35 @@
+{% macro run_pill(status) -%}
+{%- if status == "ok" -%}<span class="pill online">OK</span>
+{%- elif status == "brake" -%}<span class="pill pending">Brake</span>
+{%- elif status == "failed" -%}<span class="pill offline">Failed</span>
+{%- else -%}<span class="pill blue">Running</span>
+{%- endif -%}
+{%- endmacro %}
+
+{% macro action_pill(action) -%}
+{%- if action == "drop" -%}<span class="pill offline">Drop</span>
+{%- elif action == "hold" -%}<span class="pill pending">Hold</span>
+{%- else -%}<span class="pill blue">Set</span>
+{%- endif -%}
+{%- endmacro %}
+
+{% macro report_lists(report) -%}
+{% if report.failures %}
+<div class="card"><h3>Failed checks <span class="count">{{ report.failures | length }}</span></h3>
+<div class="tbl"><table><tr><th>Entry</th><th>Reason</th></tr>
+{% for f in report.failures %}<tr><td class="mono">{{ f.entry }}</td><td>{{ f.reason }}</td></tr>{% endfor %}
+</table></div></div>
+{% endif %}
+{% if report.clashes %}
+<div class="card"><h3>Clashes <span class="count">{{ report.clashes | length }}</span></h3>
+<div class="tbl"><table><tr><th>Entry</th><th>Kept</th><th>Over</th></tr>
+{% for c in report.clashes %}<tr><td class="mono">{{ c.entry }}</td><td class="mono">{{ c.kept }}</td><td class="mono">{{ c.over | join(", ") }}</td></tr>{% endfor %}
+</table></div></div>
+{% endif %}
+{% for title, items in [("Held", report.held), ("Dropped", report.dropped), ("Waiting for their source's delay", report.waiting)] %}
+{% if items %}
+<div class="card"><details><summary>{{ title }} <span class="muted">({{ items | length }})</span></summary>
+<div class="list">{% for i in items[:500] %}<div>{{ i }}</div>{% endfor %}</div></details></div>
+{% endif %}
+{% endfor %}
+{%- endmacro %}
