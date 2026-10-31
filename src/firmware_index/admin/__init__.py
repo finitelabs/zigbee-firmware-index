@@ -51,7 +51,7 @@ class Guard:
         if email not in self.emails:
             return await PlainTextResponse("Not allowed", 403)(scope, receive, send)
         if scope["method"] == "POST":
-            # Traefik's forward auth rides on a cookie, so a form from another site must not count.
+            # The proxy's sign-in rides on a cookie, so a form from another site must not count.
             origin = headers.get("origin") or headers.get("referer") or ""
             if urlparse(origin).netloc != headers.get("host"):
                 return await PlainTextResponse("Cross-site form refused", 403)(scope, receive, send)
