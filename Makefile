@@ -42,6 +42,10 @@ check:
 test:
 	pytest
 
+.PHONY: dev
+dev:
+	PYTHONPATH=src python -m firmware_index serve --local .dev
+
 .PHONY: image
 image:
 	docker build -t $(IMAGE):dev .

@@ -16,7 +16,8 @@ The image's entry point is `python -m firmware_index`:
 | ------------------------ | --------------------------------------------------------------------- |
 | `publish`                | One run. Exits 0 on success, 2 when the brake holds the index, 1 otherwise |
 | `publish --anyway`       | One run that publishes even when the brake would hold the index       |
-| `publish --dry-run DIR`  | One run into DIR/site, with its own database and key in DIR/data      |
+| `publish --local DIR`    | One run into the folder DIR/site, with its own database and key in DIR/data |
+| `serve --local DIR`      | The admin page on 127.0.0.1 with no sign-in; Publish now runs into DIR |
 | `serve`                  | The admin page (the image's default command)                          |
 | `dump`                   | Writes a consistent copy of the database to stdout, for backups       |
 | `keygen PATH`            | Writes a new Ed25519 signing key to PATH and prints its public key    |
@@ -90,6 +91,18 @@ repository variable `OTA_CHECK_ENABLED` is `true`. It reads
 the variables `PUBLIC_URL` and `SIGNING_KEY_PUB`, and posts a failure to the
 secret `DISCORD_WEBHOOK_URL`. GitHub turns a schedule off after 60 days with no
 activity in the repository.
+
+## Run it locally
+
+```bash
+make dev
+```
+
+This serves the admin page at <http://127.0.0.1:8080/> with no sign-in, and keeps
+everything under `.dev/`: the database and a signing key in `.dev/data`, and the
+published site, on disk instead of R2, in `.dev/site`, served at
+<http://127.0.0.1:8080/site/>. Publish now runs a real publish against the live
+sources; the first takes about a minute to download every file.
 
 ## Development
 

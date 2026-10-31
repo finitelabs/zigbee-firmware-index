@@ -1,4 +1,4 @@
-"""Where a run publishes: the R2 bucket, or a folder for a dry run and tests."""
+"""Where a run publishes: the R2 bucket, or a folder when run locally and in tests."""
 
 import uuid
 from pathlib import Path

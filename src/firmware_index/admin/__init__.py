@@ -14,7 +14,8 @@ from starlette.applications import Starlette
 from starlette.datastructures import Headers, UploadFile
 from starlette.requests import Request
 from starlette.responses import PlainTextResponse, RedirectResponse, Response
-from starlette.routing import Route
+from starlette.routing import Mount, Route
+from starlette.staticfiles import StaticFiles
 from starlette.templating import Jinja2Templates
 
 from firmware_index import db as dbm
@@ -37,17 +38,19 @@ class Refused(Exception):
 
 
 class Guard:
-    """Only the listed emails, and a form only from this site's own pages."""
+    """Only the listed emails, and a form only from this site's own pages. Run locally, the one
+    local user stands in for the sign-in proxy's header."""
 
-    def __init__(self, app, emails: set[str]):
+    def __init__(self, app, emails: set[str], local_user: str | None = None):
         self.app = app
         self.emails = emails
+        self.local_user = local_user
 
     async def __call__(self, scope, receive, send):
         if scope["type"] != "http" or scope["path"] == "/healthz":
             return await self.app(scope, receive, send)
         headers = Headers(scope=scope)
-        email = headers.get(EMAIL_HEADER, "").strip().lower()
+        email = self.local_user or headers.get(EMAIL_HEADER, "").strip().lower()
         if email not in self.emails:
             return await PlainTextResponse("Not allowed", 403)(scope, receive, send)
         if scope["method"] == "POST":
@@ -515,9 +518,18 @@ async def audit_page(request: Request) -> Response:
     return page(request, "audit.html", rows=rows)
 
 
-def create_app(data: Path, emails: set[str], start_publish=kube.start_publish) -> Starlette:
+def create_app(
+    data: Path,
+    emails: set[str],
+    start_publish=kube.start_publish,
+    local_user: str | None = None,
+    site: Path | None = None,
+) -> Starlette:
+    """The admin page. Run locally, `site` is the published folder, served at /site."""
+    local = [Mount("/site", StaticFiles(directory=site, html=True))] if site else []
     app = Starlette(
-        routes=[
+        routes=local
+        + [
             Route("/healthz", healthz),
             Route("/", runs),
             Route("/runs/{id:int}", run_detail),
@@ -544,4 +556,4 @@ def create_app(data: Path, emails: set[str], start_publish=kube.start_publish) -
     app.state.uploads = data / "uploads"
     app.state.start_publish = start_publish
     dbm.connect(app.state.db_path).close()
-    return Guard(app, {e.strip().lower() for e in emails if e.strip()})
+    return Guard(app, {e.strip().lower() for e in emails if e.strip()}, local_user)
