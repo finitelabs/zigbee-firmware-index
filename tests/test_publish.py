@@ -1,3 +1,4 @@
+import asyncio
 import hashlib
 import json
 
@@ -193,6 +194,19 @@ def test_the_brake_holds_the_index_unless_told_to_publish_anyway(world):
     assert len(world.index()) == 18
 
 
+def test_only_a_run_that_publishes_ends_a_rollback_s_pause(world):
+    world.source("community", 3, A)
+    listed = files(world, 20)
+    world.fetcher.serve(A, listed)
+    world.run()
+    dbm.set_setting(world.db, "paused_for", "1")
+    world.fetcher.serve(A, listed[:18])
+    assert world.run().status == publish.BRAKE
+    assert dbm.get_setting(world.db, "paused_for") == "1"
+    assert world.run(anyway=True).status == publish.OK
+    assert not dbm.get_setting(world.db, "paused_for")
+
+
 def test_rules_hold_drop_and_correct_entries(world):
     world.source("community", 3, A)
     listed = files(world, 3)
@@ -323,3 +337,65 @@ def test_a_run_stopped_part_way_is_recorded_as_failed(world, monkeypatch):
     assert row["status"] == publish.FAILED
     assert "the run was stopped before it finished" in json.loads(row["report"])["alerts"]
     assert world.db.execute("SELECT COUNT(*) FROM lock").fetchone()[0] == 0
+
+
+def test_a_braked_run_keeps_its_index_and_can_be_published_as_built(world):
+    world.source("community", 3, A)
+    listed = files(world, 20)
+    world.fetcher.serve(A, listed)
+    world.run()
+    world.fetcher.serve(A, listed[:18])
+    assert world.run().status == publish.BRAKE
+    braked = world.db.execute("SELECT id, result_sha512 FROM runs ORDER BY id DESC").fetchone()
+    assert braked["result_sha512"]
+    assert len(world.index()) == 20
+
+    settings = publish.Settings(
+        public_url="https://ota.example.test", key=world.key, store=world.store, anyway=True
+    )
+    report = asyncio.run(publish.republish(world.db, settings, braked["id"]))
+
+    assert report.status == publish.OK and report.republished == braked["id"]
+    assert report.counts["removed"] == 2
+    assert len(world.index()) == 18
+    latest = json.loads(world.read("latest.json"))
+    assert keys.verify(
+        world.public, f"{latest['snapshot']}\n{latest['sha512']}".encode(), latest["signature"]
+    )
+
+
+def test_a_rollback_republishes_an_older_index_as_a_new_snapshot(world):
+    world.source("community", 3, A)
+    listed = files(world, 3)
+    world.fetcher.serve(A, listed)
+    world.run()
+    first = json.loads(world.read("latest.json"))
+    world.clock.advance(hours=1)
+    world.fetcher.serve(A, listed + files(world, 1, start=3))
+    world.run()
+    assert len(world.index()) == 4
+    world.clock.advance(hours=1)
+    settings = publish.Settings(
+        public_url="https://ota.example.test", key=world.key, store=world.store, anyway=True
+    )
+
+    report = asyncio.run(publish.republish(world.db, settings, 1))
+
+    assert report.counts["removed"] == 1 and len(world.index()) == 3
+    latest = json.loads(world.read("latest.json"))
+    assert latest["sha512"] == first["sha512"] and latest["snapshot"] > first["snapshot"]
+
+
+def test_a_run_with_no_kept_index_or_a_held_lock_cannot_be_republished(world):
+    settings = publish.Settings(
+        public_url="https://ota.example.test", key=world.key, store=world.store, anyway=True
+    )
+    report = asyncio.run(publish.republish(world.db, settings, 99))
+    assert report.alerts == ["run #99 kept no index to publish"]
+
+    world.source("community", 3, A)
+    world.fetcher.serve(A, files(world, 1))
+    world.run()
+    assert dbm.take_lock(world.db, "other", dbm.now())
+    report = asyncio.run(publish.republish(world.db, settings, 1))
+    assert report.alerts == ["another run holds the lock"]

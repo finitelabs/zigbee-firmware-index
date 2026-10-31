@@ -57,7 +57,13 @@ CREATE TABLE runs (
   finished TEXT,
   status TEXT,
   anyway INTEGER NOT NULL DEFAULT 0,
-  report TEXT
+  report TEXT,
+  result_sha512 TEXT
+);
+CREATE TABLE snapshots (
+  sha512 TEXT PRIMARY KEY,
+  entries TEXT NOT NULL,
+  created TEXT NOT NULL
 );
 CREATE TABLE published (
   id INTEGER PRIMARY KEY CHECK (id = 1),
@@ -156,12 +162,17 @@ def dump(path: Path, out) -> None:
         out.write(Path(tmp.name).read_bytes())
 
 
+def lock_held(db: sqlite3.Connection, at: datetime.datetime) -> bool:
+    """A lock older than LOCK_EXPIRES was left by a run that died."""
+    row = db.execute("SELECT since FROM lock WHERE id = 1").fetchone()
+    return bool(row) and at - datetime.datetime.fromisoformat(row["since"]) < LOCK_EXPIRES
+
+
 def take_lock(db: sqlite3.Connection, holder: str, at: datetime.datetime) -> bool:
-    """One run at a time. A lock older than LOCK_EXPIRES was left by a run that died."""
+    """One run at a time."""
     db.execute("BEGIN IMMEDIATE")
     try:
-        row = db.execute("SELECT since FROM lock WHERE id = 1").fetchone()
-        if row and at - datetime.datetime.fromisoformat(row["since"]) < LOCK_EXPIRES:
+        if lock_held(db, at):
             db.execute("ROLLBACK")
             return False
         db.execute(

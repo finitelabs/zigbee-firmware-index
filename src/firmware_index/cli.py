@@ -143,14 +143,7 @@ def serve(args: argparse.Namespace) -> int:
         (root / "site").mkdir(parents=True, exist_ok=True)
         data, _ = local_settings(root, base, False)
         runs = Runner(data, lambda anyway: local_settings(root, base, anyway)[1], None)
-        app = create_app(
-            data,
-            {LOCAL_USER},
-            runs.start,
-            local_user=LOCAL_USER,
-            site=root / "site",
-            scheduler=runs.loop,
-        )
+        app = create_app(data, {LOCAL_USER}, runs, local_user=LOCAL_USER, site=root / "site")
         print(f"The admin page is at http://127.0.0.1:{port}/ and the site at {base}/")
         uvicorn.run(app, host="127.0.0.1", port=port)
         return 0
@@ -158,7 +151,7 @@ def serve(args: argparse.Namespace) -> int:
     r2_settings(False)  # fail at start, not at the first run, when a setting is missing
     runs = Runner(data_dir(), r2_settings, discord())
     emails = set(env("ADMIN_EMAILS").split(","))
-    app = create_app(data_dir(), emails, runs.start, scheduler=runs.loop)
+    app = create_app(data_dir(), emails, runs)
     uvicorn.run(
         app,
         host=os.environ.get("HOST", "0.0.0.0"),

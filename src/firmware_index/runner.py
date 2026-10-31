@@ -72,19 +72,43 @@ class Runner:
         return "a run"
 
     async def _run(self, anyway: bool, day: str | None) -> None:
-        await publish_once(self.data, self.settings_for(anyway), self.webhook)
-        if day:
+        report = await publish_once(self.data, self.settings_for(anyway), self.webhook)
+        if day and publish.LOCKED not in report.alerts:
             db = dbm.connect(self.data / "index.sqlite3")
             try:
                 dbm.set_setting(db, "schedule_last", day)
             finally:
                 db.close()
 
+    async def republish(self, run_id: int, pause: bool = False) -> publish.Report:
+        """Publish the index an earlier run built, now, in place of the live one. `pause` stops
+        scheduled runs from inside the task, so no tick lands before the pause is set."""
+        if self.running:
+            raise RuntimeError("a run is already going")
+        self.task = asyncio.create_task(self._republish(run_id, pause))
+        report = await self.task
+        if report.status != publish.OK:
+            raise RuntimeError("; ".join(report.alerts) or "it failed")
+        return report
+
+    async def _republish(self, run_id: int, pause: bool) -> publish.Report:
+        db = dbm.connect(self.data / "index.sqlite3")
+        try:
+            report = await publish.republish(db, self.settings_for(True), run_id)
+            if pause and report.status == publish.OK:
+                dbm.set_setting(db, "paused_for", str(run_id))
+        finally:
+            db.close()
+        await notify.post(self.webhook, report)
+        return report
+
     async def tick(self, now: datetime.datetime) -> bool:
         db = dbm.connect(self.data / "index.sqlite3")
         try:
             on, at = schedule(db)
-            if self.running or not due(on, at, dbm.get_setting(db, "schedule_last"), now):
+            paused = bool(dbm.get_setting(db, "paused_for"))
+            last = dbm.get_setting(db, "schedule_last")
+            if self.running or paused or dbm.lock_held(db, now) or not due(on, at, last, now):
                 return False
         finally:
             db.close()

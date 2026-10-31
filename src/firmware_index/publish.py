@@ -21,6 +21,7 @@ from firmware_index.sources import Candidate
 from firmware_index.store import IMMUTABLE, SHORT, Store
 
 OK, BRAKE, FAILED = "ok", "brake", "failed"
+LOCKED = "another run holds the lock"
 BRAKE_SHARE = 0.05
 DOWNLOADS = 4
 
@@ -69,6 +70,7 @@ class Report:
     dropped: list = field(default_factory=list)
     waiting: list = field(default_factory=list)
     alerts: list = field(default_factory=list)
+    republished: int | None = None
 
 
 @dataclass
@@ -355,14 +357,14 @@ async def run(db: sqlite3.Connection, s: Settings, fetcher: Fetcher, uploads: Pa
     holder = uuid.uuid4().hex
     if not dbm.take_lock(db, holder, at):
         report.status = FAILED
-        report.alerts.append("another run holds the lock")
+        report.alerts.append(LOCKED)
         return report
     run_id = db.execute(
         "INSERT INTO runs (started, anyway) VALUES (?, ?)", (report.started, int(s.anyway))
     ).lastrowid
     try:
         entries = await build(db, s, fetcher, uploads, at, report)
-        await publish(db, s, entries, at, report)
+        await publish(db, s, entries, at, report, run_id)
     except asyncio.CancelledError:
         report.status = FAILED
         report.alerts.append("the run was stopped before it finished")
@@ -380,37 +382,57 @@ async def run(db: sqlite3.Connection, s: Settings, fetcher: Fetcher, uploads: Pa
     return report
 
 
-async def publish(db, s: Settings, entries: list[dict], at, report: Report) -> None:
-    last = db.execute("SELECT * FROM published WHERE id = 1").fetchone()
-    before = json.loads(last["entries"]) if last else []
+def compare(before: list[dict], entries: list[dict], report: Report) -> int:
+    """Fill the report's counts against the published index; returns how many entries go."""
     old, new = {identity(e) for e in before}, {identity(e) for e in entries}
-    removed, added = old - new, new - old
     report.counts = {
         "entries": len(entries),
-        "added": len(added),
-        "removed": len(removed),
+        "added": len(new - old),
+        "removed": len(old - new),
         "failed": len(report.failures),
         "held": len(report.held),
         "dropped": len(report.dropped),
         "waiting": len(report.waiting),
         "clashes": len(report.clashes),
     }
+    return len(old - new)
+
+
+def keep(db, run_id: int, entries: list[dict]) -> tuple[bytes, str]:
+    """Store the index a run built, published or not, so it can be published later."""
+    body = serialize(entries)
+    sha = hashlib.sha512(body).hexdigest()
+    db.execute(
+        "INSERT OR IGNORE INTO snapshots (sha512, entries, created) VALUES (?, ?, ?)",
+        (sha, json.dumps(entries), dbm.iso(dbm.now())),
+    )
+    db.execute("UPDATE runs SET result_sha512 = ? WHERE id = ?", (sha, run_id))
+    return body, sha
+
+
+async def publish(db, s: Settings, entries: list[dict], at, report: Report, run_id: int) -> None:
+    last = db.execute("SELECT * FROM published WHERE id = 1").fetchone()
+    before = json.loads(last["entries"]) if last else []
+    removed = compare(before, entries, report)
     if not entries and not before:
         report.status = FAILED
         report.alerts.append("no entries to publish, and nothing was published before")
         return
-    if before and len(removed) > BRAKE_SHARE * len(before) and not s.anyway:
+    body, sha = keep(db, run_id, entries)
+    if before and removed > BRAKE_SHARE * len(before) and not s.anyway:
         report.status = BRAKE
         report.alerts.append(
-            f"brake: this run would remove {len(removed)} of {len(before)} entries;"
+            f"brake: this run would remove {removed} of {len(before)} entries;"
             " the last index stays"
         )
         return
+    await write(db, s, entries, body, sha, at, report, last)
 
-    body = serialize(entries)
-    sha = hashlib.sha512(body).hexdigest()
+
+async def write(db, s: Settings, entries, body: bytes, sha: str, at, report: Report, last) -> None:
     put = s.store.put
     if last is None or last["sha512"] != sha:
+        # A new path even for an index published before: a reader only moves forward.
         snapshot = f"snapshots/{at.strftime('%Y%m%dT%H%M%SZ')}.json"
         await asyncio.to_thread(put, snapshot, body, "application/json", IMMUTABLE)
         db.execute(
@@ -422,6 +444,7 @@ async def publish(db, s: Settings, entries: list[dict], at, report: Report) -> N
     else:
         snapshot = last["snapshot"]
     report.snapshot = snapshot
+    dbm.set_setting(db, "paused_for", "")
 
     public = keys.public_hex(s.key)
     latest = {
@@ -436,3 +459,43 @@ async def publish(db, s: Settings, entries: list[dict], at, report: Report) -> N
     await asyncio.to_thread(put, "index.json", body, "application/json", SHORT)
     latest_body = (json.dumps(latest, indent=2) + "\n").encode()
     await asyncio.to_thread(put, "latest.json", latest_body, "application/json", SHORT)
+
+
+async def republish(db, s: Settings, source_run: int) -> Report:
+    """Publish the index an earlier run built: a rollback, or a run the brake held."""
+    at = dbm.now()
+    report = Report(started=dbm.iso(at), republished=source_run)
+    row = db.execute(
+        "SELECT snapshots.entries FROM runs JOIN snapshots"
+        " ON snapshots.sha512 = runs.result_sha512 WHERE runs.id = ?",
+        (source_run,),
+    ).fetchone()
+    if row is None:
+        report.status = FAILED
+        report.alerts.append(f"run #{source_run} kept no index to publish")
+        return report
+    holder = uuid.uuid4().hex
+    if not dbm.take_lock(db, holder, at):
+        report.status = FAILED
+        report.alerts.append(LOCKED)
+        return report
+    run_id = db.execute(
+        "INSERT INTO runs (started, anyway) VALUES (?, 1)", (report.started,)
+    ).lastrowid
+    try:
+        entries = json.loads(row["entries"])
+        last = db.execute("SELECT * FROM published WHERE id = 1").fetchone()
+        compare(json.loads(last["entries"]) if last else [], entries, report)
+        body, sha = keep(db, run_id, entries)
+        await write(db, s, entries, body, sha, at, report, last)
+    except Exception as e:
+        report.status = FAILED
+        report.alerts.append(f"publish failed: {type(e).__name__}: {e}")
+    finally:
+        report.finished = dbm.iso(dbm.now())
+        db.execute(
+            "UPDATE runs SET finished = ?, status = ?, report = ? WHERE id = ?",
+            (report.finished, report.status, json.dumps(dataclasses.asdict(report)), run_id),
+        )
+        dbm.release_lock(db, holder)
+    return report

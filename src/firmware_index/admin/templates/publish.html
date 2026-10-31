@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m %}
+{% block content %}
+{% set braked = run.action == "publish" %}
+<div class="head">
+  <div><h1>{{ "Publish" if braked else "Roll back to" }} run #{{ run.id }}'s index</h1>
+  <p>{% if braked %}The brake held this run because it would remove more than 5% of the index. Publishing it makes its index live as it was built; nothing is fetched again.{% else %}This makes the index run #{{ run.id }} published on {{ run.started | when }} live again, as a new snapshot.{% endif %}</p></div>
+  <div class="actions"><a class="btn" href="/runs/{{ run.id }}">Cancel</a></div>
+</div>
+<div class="card">
+  <h3><span>What changes against the live index</span><span class="count">{{ live }} entries now, {{ count }} after</span></h3>
+  {{ m.diff_view(changes) }}
+</div>
+<div class="card">
+  <form method="post" action="/runs/{{ run.id }}/publish">
+    {% if braked %}
+    <div class="fields">
+      <div class="field wide"><label>Type <b>publish</b> to confirm</label><input type="text" name="confirm" autocomplete="off" required></div>
+      <button class="btn danger">Publish run #{{ run.id }}'s index</button>
+    </div>
+    {% else %}
+    <button class="btn primary">Roll back to run #{{ run.id }}'s index</button>
+    {% endif %}
+  </form>
+  <p class="hint">{% if braked %}The next run builds the index again from the sources. To keep a file out after this, hold or drop it.{% elif pauses %}Rolling back pauses scheduled runs, so the next one doesn't build the index again over it. Resume them from the Runs page when you're ready.{% else %}Scheduled runs are off, so this index stays until you publish another.{% endif %}</p>
+</div>
+{% endblock %}

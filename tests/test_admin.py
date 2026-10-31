@@ -20,24 +20,37 @@ ME = "derek@example.test"
 SIGNED_IN = {"x-auth-request-email": ME, "origin": "http://testserver"}
 
 
-@pytest.fixture
-def admin(tmp_path):
-    started = []
+class FakeRuns:
+    """Records the runs the page asks for; `fail` makes each refuse with that message."""
 
-    async def start(anyway):
-        started.append(anyway)
+    def __init__(self, fail=None):
+        self.started, self.republished, self.fail = [], [], fail
+
+    async def start(self, anyway):
+        if self.fail:
+            raise RuntimeError(self.fail)
+        self.started.append(anyway)
         return "a run"
 
-    app = create_app(tmp_path, {ME, " "}, start_publish=start)
+    async def republish(self, run_id, pause=False):
+        if self.fail:
+            raise RuntimeError(self.fail)
+        self.republished.append((run_id, pause))
+
+
+@pytest.fixture
+def admin(tmp_path):
+    runs = FakeRuns()
+    app = create_app(tmp_path, {ME, " "}, runs)
     client = TestClient(app, headers=SIGNED_IN, follow_redirects=False)
-    client.started = started
+    client.runs = runs
+    client.started = runs.started
     client.db = dbm.connect(tmp_path / "index.sqlite3")
     client.data = tmp_path
     return client
 
 
-async def never_start(anyway):
-    raise AssertionError("no run should start")
+never_start = FakeRuns(fail="no run should start")
 
 
 def message(response):
@@ -71,12 +84,10 @@ def test_a_form_from_another_site_is_refused(admin):
     assert admin.started == []
 
 
-def test_publish_now_and_anyway_start_a_run_and_are_audited(admin):
-    assert "Started+a+run" in message(admin.post("/publish", data={"anyway": "0"}))
-    admin.post("/publish", data={"anyway": "1"})
-    assert admin.started == [False, True]
-    assert audit(admin) == ["publish", "publish"]
-    assert "Publish anyway" in admin.get("/").text
+def test_publish_now_starts_a_run_and_is_audited(admin):
+    assert "Started+a+run" in message(admin.post("/publish"))
+    assert admin.started == [False]
+    assert audit(admin) == ["publish"]
 
 
 def test_sources_are_listed_added_checked_and_edited(admin):
@@ -298,13 +309,9 @@ def test_run_locally_the_local_user_needs_no_sign_in_and_the_site_is_served(tmp_
     site = tmp_path / "site"
     site.mkdir()
     (site / "index.json").write_text("[]\n")
-    started = []
-
-    async def start(anyway):
-        started.append(anyway)
-        return "a run"
-
-    app = create_app(tmp_path, {"local@localhost"}, start, "local@localhost", site)
+    runs = FakeRuns()
+    started = runs.started
+    app = create_app(tmp_path, {"local@localhost"}, runs, "local@localhost", site)
     assert TestClient(app).get("/", headers={"host": "rebound.example.test"}).status_code == 403
     client = TestClient(app, base_url="http://localhost:8080", follow_redirects=False)
     assert "local@localhost" in client.get("/").text
@@ -351,15 +358,136 @@ def test_the_app_runs_its_scheduler_while_it_is_up(tmp_path):
         ran.append("started")
         await asyncio.sleep(3600)
 
-    app = create_app(tmp_path, {ME}, never_start, scheduler=scheduler)
+    runs = FakeRuns()
+    runs.loop = scheduler
+    app = create_app(tmp_path, {ME}, runs)
     with TestClient(app) as client:
         assert client.get("/healthz").text == "ok"
     assert ran == ["started"]
 
 
 def test_a_run_that_cannot_start_says_why(tmp_path):
-    async def busy(anyway):
-        raise RuntimeError("a run is already going")
-
+    busy = FakeRuns(fail="a run is already going")
     client = TestClient(create_app(tmp_path, {ME}, busy), headers=SIGNED_IN, follow_redirects=False)
     assert "a+run+is+already+going" in message(client.post("/publish", data={"anyway": "0"}))
+
+
+def seed_runs(admin):
+    """Run 1 published A, run 2 published B (live), run 3 was held by the brake with C."""
+    shas = {}
+    for name, entries in (
+        ("a", [entry("a" * 128, 1, "A")]),
+        ("b", [entry("b" * 128, 2, "B")]),
+        ("c", []),
+    ):
+        sha = name * 128
+        shas[name] = sha
+        admin.db.execute(
+            "INSERT INTO snapshots (sha512, entries, created) VALUES (?, ?, 't')",
+            (sha, json.dumps(entries)),
+        )
+    for run_id, status, sha in ((1, "ok", "a"), (2, "ok", "b"), (3, "brake", "c")):
+        admin.db.execute(
+            "INSERT INTO runs (id, started, status, report, result_sha512) VALUES (?, ?, ?, '{}', ?)",
+            (run_id, f"2026-10-31T0{run_id}:00:00Z", status, shas[sha]),
+        )
+    admin.db.execute(
+        "INSERT INTO published (id, snapshot, sha512, entries, at) VALUES (1, 's', ?, ?, 't')",
+        (shas["b"], json.dumps([entry("b" * 128, 2, "B")])),
+    )
+
+
+def test_each_run_offers_live_roll_back_or_publish(admin):
+    seed_runs(admin)
+    page = admin.get("/").text
+    assert page.count(">Live<") == 1
+    assert 'href="/runs/1/publish">Roll back' in page
+    assert 'href="/runs/3/publish">Publish' in page
+    assert "/runs/2/publish" not in page
+    assert "Publish anyway" not in page
+
+
+def test_a_braked_run_publishes_only_once_publish_is_typed(admin):
+    seed_runs(admin)
+    confirm = admin.get("/runs/3/publish").text
+    assert "Type <b>publish</b> to confirm" in confirm and "B.ota" in confirm
+    assert "Type+publish" in message(admin.post("/runs/3/publish", data={"confirm": "yes"}))
+    assert admin.runs.republished == []
+    assert "Published+run" in message(admin.post("/runs/3/publish", data={"confirm": "publish"}))
+    assert admin.runs.republished == [(3, False)]
+    assert audit(admin) == ["publish"]
+
+
+def test_a_rollback_needs_only_its_button_and_the_live_run_offers_none(admin):
+    seed_runs(admin)
+    confirm = admin.get("/runs/1/publish").text
+    assert (
+        "Roll back to run #1" in confirm
+        and "confirm" not in confirm.split("<form")[1].split("</form>")[0]
+    )
+    assert "Rolled+back" in message(admin.post("/runs/1/publish"))
+    assert admin.runs.republished == [(1, True)]
+    assert "is+live" in message(admin.post("/runs/2/publish"))
+    assert "is+live" in message(admin.get("/runs/2/publish"))
+
+
+def test_a_diff_pairs_a_new_version_of_the_same_listing_as_updated():
+    from firmware_index.admin import diff
+
+    def e(sha, mfr, version, model="M"):
+        return {**entry(sha * 128, mfr, model), "fileVersion": version}
+
+    # One file listed for any model and for model X, as the community index does.
+    g = [e("g", 5, 0x10, model=None), e("g", 5, 0x10, model="X")]
+    h = [e("h", 5, 0x12, model=None), e("h", 5, 0x12, model="X")]
+    before = [e("a", 1, 0x10), e("b", 2, 0x10), e("c", 3, 0x10)] + g
+    after = [e("a", 1, 0x10), e("d", 2, 0x11), e("f", 4, 0x10)] + h
+    changes = diff(before, after)
+    assert [n["fileVersion"] for _, n in changes["updated"]] == [0x11, 0x12, 0x12]
+    assert [x["manufacturerCode"] for x in changes["added"]] == [4]
+    assert [x["manufacturerCode"] for x in changes["removed"]] == [3]
+
+
+def test_a_run_page_shows_its_changes_against_the_run_before_or_any_chosen(admin):
+    seed_runs(admin)
+    page = admin.get("/runs/2").text
+    assert "Changes" in page and "B.ota" in page and "A.ota" in page
+    assert 'value="1" selected' in page
+    chosen = admin.get("/runs/2", params={"vs": "3"}).text
+    assert 'value="3" selected' in chosen and "A.ota" not in chosen.split("Changes")[1]
+
+
+def test_a_rollback_pauses_scheduled_runs_until_resumed_and_keeps_the_schedule(admin):
+    seed_runs(admin)
+    admin.post("/schedule", data={"at": "05:30", "on": "1"})
+    assert "scheduled+runs+are+paused" in message(admin.post("/runs/1/publish"))
+    assert admin.runs.republished == [(1, True)]
+    dbm.set_setting(admin.db, "paused_for", "1")
+    page = admin.get("/").text
+    assert "Rolled back to run #1" in page and "Paused while rolled back to run #1" in page
+    assert 'value="05:30"' in page and "Next run" not in page
+    assert "no+longer+paused" in message(admin.post("/schedule/resume"))
+    assert not dbm.get_setting(admin.db, "paused_for")
+    assert dbm.get_setting(admin.db, "schedule_on") == "1"
+    page = admin.get("/").text
+    assert "Resume scheduled runs" not in page and "Next run" in page
+
+
+def test_only_a_rollback_with_scheduled_runs_on_pauses_them(admin):
+    seed_runs(admin)
+    admin.post("/runs/3/publish", data={"confirm": "publish"})
+    admin.post("/schedule", data={"at": "04:00"})
+    assert "Scheduled runs are off, so this index stays" in admin.get("/runs/1/publish").text
+    rolled = message(admin.post("/runs/1/publish"))
+    assert "Rolled+back" in rolled and "paused" not in rolled
+    assert admin.runs.republished == [(3, False), (1, False)]
+
+
+def test_runs_that_kept_the_same_index_offer_it_once(admin):
+    seed_runs(admin)
+    admin.db.execute(
+        "INSERT INTO runs (id, started, status, report, result_sha512) VALUES (4, 't', 'ok', '{}', ?)",
+        ("a" * 128,),
+    )
+    page = admin.get("/").text
+    assert page.count("Roll back") == 1 and 'href="/runs/4/publish">Roll back' in page
