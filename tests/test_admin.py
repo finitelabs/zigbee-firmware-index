@@ -457,21 +457,25 @@ def test_a_run_page_shows_its_changes_against_the_run_before_or_any_chosen(admin
     assert 'value="3" selected' in chosen and "A.ota" not in chosen.split("Changes")[1]
 
 
-def test_a_rollback_switches_scheduled_runs_off_until_resumed(admin):
+def test_a_rollback_pauses_scheduled_runs_until_resumed_and_keeps_the_schedule(admin):
     seed_runs(admin)
-    assert "scheduled+runs+are+off" in message(admin.post("/runs/1/publish"))
-    assert dbm.get_setting(admin.db, "schedule_on") == "0"
-    page = admin.get("/").text
-    assert "Rolled back to run #1" in page and "Resume scheduled runs" in page
-    assert "back+on" in message(admin.post("/schedule/resume"))
+    admin.post("/schedule", data={"at": "05:30", "on": "1"})
+    assert "scheduled+runs+are+paused" in message(admin.post("/runs/1/publish"))
+    assert dbm.get_setting(admin.db, "paused_for") == "1"
     assert dbm.get_setting(admin.db, "schedule_on") == "1"
-    assert "Resume scheduled runs" not in admin.get("/").text
+    page = admin.get("/").text
+    assert "Rolled back to run #1" in page and "Paused while rolled back to run #1" in page
+    assert 'value="05:30"' in page and "Next run" not in page
+    assert "no+longer+paused" in message(admin.post("/schedule/resume"))
+    assert not dbm.get_setting(admin.db, "paused_for")
+    page = admin.get("/").text
+    assert "Resume scheduled runs" not in page and "Next run" in page
 
 
-def test_publishing_a_braked_run_leaves_the_schedule_on(admin):
+def test_publishing_a_braked_run_does_not_pause_the_schedule(admin):
     seed_runs(admin)
     admin.post("/runs/3/publish", data={"confirm": "publish"})
-    assert dbm.get_setting(admin.db, "schedule_on", "1") == "1"
+    assert not dbm.get_setting(admin.db, "paused_for")
 
 
 def test_runs_that_kept_the_same_index_offer_it_once(admin):

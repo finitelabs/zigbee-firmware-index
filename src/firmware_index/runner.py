@@ -103,7 +103,9 @@ class Runner:
         db = dbm.connect(self.data / "index.sqlite3")
         try:
             on, at = schedule(db)
-            if self.running or not due(on, at, dbm.get_setting(db, "schedule_last"), now):
+            paused = bool(dbm.get_setting(db, "paused_for"))
+            last = dbm.get_setting(db, "schedule_last")
+            if self.running or paused or not due(on, at, last, now):
                 return False
         finally:
             db.close()

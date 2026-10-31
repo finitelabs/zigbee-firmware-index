@@ -176,9 +176,10 @@ async def runs_page(request: Request) -> Response:
         None,
     )
     on, at = runner.schedule(db)
+    paused_for = dbm.get_setting(db, "paused_for") or None
     now = dbm.now()
     upcoming = None
-    if on:
+    if on and not paused_for:
         upcoming = dbm.iso(runner.next_run(at, now, dbm.get_setting(db, "schedule_last")))
     return page(
         request,
@@ -189,16 +190,15 @@ async def runs_page(request: Request) -> Response:
         schedule_on=on,
         schedule_at=at,
         upcoming=upcoming,
-        paused_for=None if on else (dbm.get_setting(db, "paused_for") or None),
+        paused_for=paused_for,
     )
 
 
 async def resume_schedule(request: Request) -> Response:
     db = open_db(request)
-    dbm.set_setting(db, "schedule_on", "1")
     dbm.set_setting(db, "paused_for", "")
-    dbm.audit(db, request.state.user, "schedule", {"on": True})
-    return back("/", "Scheduled runs are back on")
+    dbm.audit(db, request.state.user, "resume", {})
+    return back("/", "Scheduled runs are no longer paused")
 
 
 async def save_schedule(request: Request) -> Response:
@@ -210,8 +210,6 @@ async def save_schedule(request: Request) -> Response:
     db = open_db(request)
     dbm.set_setting(db, "schedule_at", at)
     dbm.set_setting(db, "schedule_on", "1" if on else "0")
-    if on:
-        dbm.set_setting(db, "paused_for", "")
     dbm.audit(db, request.state.user, "schedule", {"at": at, "on": on})
     return back("/", f"Runs every day at {at} UTC" if on else "Scheduled runs are off")
 
@@ -365,9 +363,8 @@ async def publish_run(request: Request) -> Response:
     dbm.audit(db, request.state.user, run["action"], {"run": run["id"]})
     if run["action"] == "rollback":
         # A rollback is a stop-gap: the next scheduled run would build the index again.
-        dbm.set_setting(db, "schedule_on", "0")
         dbm.set_setting(db, "paused_for", str(run["id"]))
-        return back("/", f"Rolled back to run #{run['id']}'s index; scheduled runs are off")
+        return back("/", f"Rolled back to run #{run['id']}'s index; scheduled runs are paused")
     return back("/", f"Published run #{run['id']}'s index")
 
 

@@ -9,7 +9,7 @@
   </div>
 </div>
 {% if paused_for %}
-<div class="note paused"><span>Rolled back to run #{{ paused_for }}'s index. Scheduled runs are off so the next one doesn't build it again over the rollback.</span>
+<div class="note paused"><span>Rolled back to run #{{ paused_for }}'s index. Scheduled runs are paused so the next one doesn't build it again over the rollback; Publish now still works.</span>
 <form class="inline" method="post" action="/schedule/resume"><button class="btn small">Resume scheduled runs</button></form></div>
 {% endif %}
 <div class="card">
@@ -27,7 +27,7 @@
     <div class="field"><label>Every day at (UTC)</label><input type="time" name="at" value="{{ schedule_at }}" step="60" required></div>
     <label class="check"><input type="checkbox" name="on" value="1"{% if schedule_on %} checked{% endif %}> On</label>
     <button class="btn">Save</button>
-    <span class="muted check">{% if upcoming %}Next run {{ upcoming | when }}{% else %}Off: runs happen only when you publish{% endif %}</span>
+    <span class="muted check">{% if paused_for %}Paused while rolled back to run #{{ paused_for }}{% elif upcoming %}Next run {{ upcoming | when }}{% else %}Off: runs happen only when you publish{% endif %}</span>
   </form>
 </div>
 <div class="card flush">

@@ -182,3 +182,19 @@ def test_a_scheduled_run_the_lock_refused_leaves_its_day_open(runs, monkeypatch)
         await runs.task
 
     asyncio.run(go())
+
+
+def test_a_paused_schedule_starts_nothing_until_resumed(runs):
+    db = dbm.connect(runs.path)
+    dbm.set_setting(db, "paused_for", "4")
+    db.close()
+    assert not asyncio.run(runs.tick(at(12)))
+    db = dbm.connect(runs.path)
+    dbm.set_setting(db, "paused_for", "")
+    db.close()
+
+    async def go():
+        assert await runs.tick(at(12))
+        await runs.task
+
+    asyncio.run(go())

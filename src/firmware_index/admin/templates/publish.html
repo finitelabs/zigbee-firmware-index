@@ -22,6 +22,6 @@
     <button class="btn primary">Roll back to run #{{ run.id }}'s index</button>
     {% endif %}
   </form>
-  <p class="hint">{% if braked %}The next run builds the index again from the sources. To keep a file out after this, hold or drop it.{% else %}Rolling back switches scheduled runs off, so the next one doesn't build the index again over it. Resume them from the Runs page when you're ready.{% endif %}</p>
+  <p class="hint">{% if braked %}The next run builds the index again from the sources. To keep a file out after this, hold or drop it.{% else %}Rolling back pauses scheduled runs, so the next one doesn't build the index again over it. Resume them from the Runs page when you're ready.{% endif %}</p>
 </div>
 {% endblock %}
