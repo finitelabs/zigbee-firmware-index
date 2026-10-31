@@ -1,0 +1,52 @@
+name: Check the site
+
+# From outside the homelab: catches the homelab down, runs that stopped, a broken custom
+# domain or a bad signature. Scheduled runs wait for the OTA_CHECK_ENABLED variable, so
+# nothing alerts before the site exists. GitHub turns the schedule off after 60 days with
+# no activity in the repository.
+on:
+  schedule:
+    - cron: '23 */6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    if: vars.OTA_CHECK_ENABLED == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-26.04
+    env:
+      WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Python
+        uses: actions/setup-python@v7
+        with:
+          python-version-file: .python-version
+
+      - name: Create virtualenv
+        run: |
+          python -m venv .venv
+          echo "VIRTUAL_ENV=$PWD/.venv" >> "$GITHUB_ENV"
+          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+
+      - name: Install
+        run: make init install
+
+      - name: Check
+        run: python -m firmware_index check "${PUBLIC_URL:-https://ota.finitelabs.com}" 2>&1 | tee problems.txt
+        env:
+          PYTHONPATH: src
+          PUBLIC_URL: ${{ vars.PUBLIC_URL }}
+          SIGNING_KEY_PUB: ${{ vars.SIGNING_KEY_PUB }}
+
+      - name: Post the problems to Discord
+        if: failure() && env.WEBHOOK != ''
+        run: |
+          jq -n --arg c "Firmware index check failed: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID
+          $(cat problems.txt 2>/dev/null)" '{content: $c}' \
+            | curl -fsS -H 'Content-Type: application/json' -d @- "$WEBHOOK"
