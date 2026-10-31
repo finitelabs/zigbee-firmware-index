@@ -30,7 +30,3 @@ def main(argv: list[str] | None = None) -> int:
 
     args = parser.parse_args(argv)
     return args.run(args)
-
-
-if __name__ == "__main__":
-    sys.exit(main())
