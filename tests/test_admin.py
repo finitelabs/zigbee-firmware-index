@@ -13,7 +13,7 @@ from starlette.testclient import TestClient
 
 from firmware_index import db as dbm
 from firmware_index import admin as admin_module
-from firmware_index import cli, keys, kube
+from firmware_index import cli, keys
 from firmware_index.admin import create_app
 
 ME = "derek@example.test"
@@ -26,7 +26,7 @@ def admin(tmp_path):
 
     async def start(anyway):
         started.append(anyway)
-        return "publish-manual-abc12"
+        return "a run"
 
     app = create_app(tmp_path, {ME, " "}, start_publish=start)
     client = TestClient(app, headers=SIGNED_IN, follow_redirects=False)
@@ -34,6 +34,10 @@ def admin(tmp_path):
     client.db = dbm.connect(tmp_path / "index.sqlite3")
     client.data = tmp_path
     return client
+
+
+async def never_start(anyway):
+    raise AssertionError("no run should start")
 
 
 def message(response):
@@ -46,12 +50,12 @@ def audit(client):
 
 
 def test_the_health_path_needs_no_sign_in(tmp_path):
-    client = TestClient(create_app(tmp_path, {ME}))
+    client = TestClient(create_app(tmp_path, {ME}, never_start))
     assert client.get("/healthz").text == "ok"
 
 
 def test_only_a_listed_email_gets_in(tmp_path):
-    client = TestClient(create_app(tmp_path, {ME}))
+    client = TestClient(create_app(tmp_path, {ME}, never_start))
     assert client.get("/").status_code == 403
     assert client.get("/", headers={"x-auth-request-email": "x@example.test"}).status_code == 403
     assert (
@@ -67,8 +71,8 @@ def test_a_form_from_another_site_is_refused(admin):
     assert admin.started == []
 
 
-def test_publish_now_and_anyway_start_a_job_and_are_audited(admin):
-    assert "Started+publish-manual-abc12" in message(admin.post("/publish", data={"anyway": "0"}))
+def test_publish_now_and_anyway_start_a_run_and_are_audited(admin):
+    assert "Started+a+run" in message(admin.post("/publish", data={"anyway": "0"}))
     admin.post("/publish", data={"anyway": "1"})
     assert admin.started == [False, True]
     assert audit(admin) == ["publish", "publish"]
@@ -270,30 +274,6 @@ def test_dump_writes_a_database_that_opens(tmp_path):
     assert sqlite3.connect(copy).execute("SELECT who FROM audit").fetchone() == (ME,)
 
 
-def test_a_job_from_the_cronjob_carries_its_template_and_anyway():
-    cronjob = {
-        "metadata": {"name": "publish", "uid": "u-1"},
-        "spec": {
-            "jobTemplate": {
-                "metadata": {"labels": {"app": "firmware"}},
-                "spec": {
-                    "template": {"spec": {"containers": [{"name": "p", "args": ["publish"]}]}}
-                },
-            }
-        },
-    }
-    job = kube.job_from(json.loads(json.dumps(cronjob)), anyway=False)
-    assert job["metadata"]["generateName"] == "publish-manual-"
-    assert job["metadata"]["ownerReferences"][0]["uid"] == "u-1"
-    assert job["metadata"]["labels"] == {"app": "firmware"}
-    assert job["spec"]["template"]["spec"]["containers"][0]["args"] == ["publish"]
-    job = kube.job_from(json.loads(json.dumps(cronjob)), anyway=True)
-    assert job["spec"]["template"]["spec"]["containers"][0]["args"] == ["publish", "--anyway"]
-    del cronjob["spec"]["jobTemplate"]["spec"]["template"]["spec"]["containers"][0]["args"]
-    job = kube.job_from(cronjob, anyway=True)
-    assert job["spec"]["template"]["spec"]["containers"][0]["args"] == ["publish", "--anyway"]
-
-
 def test_a_url_upload_reads_the_whole_file_however_it_arrives():
     body = ota_file(0x1234, 1, 0x30, payload=bytes(range(256)) * 1200)
 
@@ -322,7 +302,7 @@ def test_run_locally_the_local_user_needs_no_sign_in_and_the_site_is_served(tmp_
 
     async def start(anyway):
         started.append(anyway)
-        return "a local run"
+        return "a run"
 
     app = create_app(tmp_path, {"local@localhost"}, start, "local@localhost", site)
     assert TestClient(app).get("/", headers={"host": "rebound.example.test"}).status_code == 403
@@ -334,7 +314,7 @@ def test_run_locally_the_local_user_needs_no_sign_in_and_the_site_is_served(tmp_
     done = client.post(
         "/publish", data={"anyway": "0"}, headers={"origin": "http://localhost:8080"}
     )
-    assert "Started+a+local+run" in done.headers["location"] and started == [False]
+    assert "Started+a+run" in done.headers["location"] and started == [False]
 
 
 def test_the_site_is_served_only_when_run_locally(admin):
@@ -349,3 +329,37 @@ def test_local_settings_make_one_key_and_publish_to_the_folder(tmp_path):
     assert first.public_url == "http://127.0.0.1:8080/site" and again.anyway
     first.store.put("x/y.json", b"{}", "application/json", "")
     assert (tmp_path / "site" / "x" / "y.json").read_bytes() == b"{}"
+
+
+def test_the_schedule_is_saved_checked_and_shown(admin):
+    page = admin.get("/").text
+    assert 'value="04:00"' in page and "Next run" in page
+    assert "HH%3AMM" in message(admin.post("/schedule", data={"at": "25:00", "on": "1"}))
+    assert "05%3A30" in message(admin.post("/schedule", data={"at": "05:30", "on": "1"}))
+    assert dbm.get_setting(admin.db, "schedule_at") == "05:30"
+    assert 'value="05:30"' in admin.get("/").text
+    assert "are+off" in message(admin.post("/schedule", data={"at": "05:30"}))
+    assert dbm.get_setting(admin.db, "schedule_on") == "0"
+    assert "runs happen only when you publish" in admin.get("/").text
+    assert audit(admin) == ["schedule", "schedule"]
+
+
+def test_the_app_runs_its_scheduler_while_it_is_up(tmp_path):
+    ran = []
+
+    async def scheduler():
+        ran.append("started")
+        await asyncio.sleep(3600)
+
+    app = create_app(tmp_path, {ME}, never_start, scheduler=scheduler)
+    with TestClient(app) as client:
+        assert client.get("/healthz").text == "ok"
+    assert ran == ["started"]
+
+
+def test_a_run_that_cannot_start_says_why(tmp_path):
+    async def busy(anyway):
+        raise RuntimeError("a run is already going")
+
+    client = TestClient(create_app(tmp_path, {ME}, busy), headers=SIGNED_IN, follow_redirects=False)
+    assert "a+run+is+already+going" in message(client.post("/publish", data={"anyway": "0"}))

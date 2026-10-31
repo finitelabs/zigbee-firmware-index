@@ -1,5 +1,7 @@
 """The admin page: runs, sources, images, rules, uploads and the audit log."""
 
+import asyncio
+import contextlib
 import hashlib
 import json
 import re
@@ -19,7 +21,7 @@ from starlette.staticfiles import StaticFiles
 from starlette.templating import Jinja2Templates
 
 from firmware_index import db as dbm
-from firmware_index import kube, ota, rules, sources
+from firmware_index import ota, rules, runner, sources
 
 EMAIL_HEADER = "x-auth-request-email"
 LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1"}
@@ -165,7 +167,30 @@ async def runs(request: Request) -> Response:
     rows = db.execute("SELECT * FROM runs ORDER BY id DESC LIMIT 30").fetchall()
     shown = [{**dict(r), "report": json.loads(r["report"] or "{}")} for r in rows]
     published = db.execute("SELECT snapshot, at FROM published WHERE id = 1").fetchone()
-    return page(request, "runs.html", runs=shown, published=published)
+    on, at = runner.schedule(db)
+    upcoming = dbm.iso(runner.next_run(at, dbm.now())) if on else None
+    return page(
+        request,
+        "runs.html",
+        runs=shown,
+        published=published,
+        schedule_on=on,
+        schedule_at=at,
+        upcoming=upcoming,
+    )
+
+
+async def save_schedule(request: Request) -> Response:
+    form = await request.form()
+    at = (form.get("at") or "").strip()
+    if not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", at):
+        return back("/", "Give the time as HH:MM, in UTC")
+    on = form.get("on") == "1"
+    db = open_db(request)
+    dbm.set_setting(db, "schedule_at", at)
+    dbm.set_setting(db, "schedule_on", "1" if on else "0")
+    dbm.audit(db, request.state.user, "schedule", {"at": at, "on": on})
+    return back("/", f"Runs every day at {at} UTC" if on else "Scheduled runs are off")
 
 
 async def run_detail(request: Request) -> Response:
@@ -183,11 +208,11 @@ async def publish_now(request: Request) -> Response:
     form = await request.form()
     anyway = form.get("anyway") == "1"
     try:
-        job = await request.app.state.start_publish(anyway)
+        await request.app.state.start_publish(anyway)
     except Exception as e:
-        return back("/", f"Could not start a run: {type(e).__name__}: {e}")
-    dbm.audit(open_db(request), request.state.user, "publish", {"job": job, "anyway": anyway})
-    return back("/", f"Started {job}")
+        return back("/", f"Could not start a run: {e}")
+    dbm.audit(open_db(request), request.state.user, "publish", {"anyway": anyway})
+    return back("/", "Started a run; refresh to follow it")
 
 
 async def sources_page(request: Request) -> Response:
@@ -645,19 +670,31 @@ async def audit_page(request: Request) -> Response:
 def create_app(
     data: Path,
     emails: set[str],
-    start_publish=kube.start_publish,
+    start_publish,
     local_user: str | None = None,
     site: Path | None = None,
+    scheduler=None,
 ) -> Starlette:
-    """The admin page. Run locally, `site` is the published folder, served at /site."""
+    """The admin page. `start_publish` starts a run; `scheduler`, if given, runs alongside the
+    app. Run locally, `site` is the published folder, served at /site."""
+
+    @contextlib.asynccontextmanager
+    async def lifespan(app):
+        task = asyncio.create_task(scheduler()) if scheduler else None
+        yield
+        if task:
+            task.cancel()
+
     local = [Mount("/site", StaticFiles(directory=site, html=True))] if site else []
     app = Starlette(
+        lifespan=lifespan,
         routes=local
         + [
             Route("/healthz", healthz),
             Route("/", runs),
             Route("/runs/{id:int}", run_detail),
             Route("/publish", publish_now, methods=["POST"]),
+            Route("/schedule", save_schedule, methods=["POST"]),
             Route("/sources", sources_page),
             Route("/sources", add_source, methods=["POST"]),
             Route("/sources/{name}", edit_source, methods=["POST"]),
@@ -674,7 +711,7 @@ def create_app(
             Route("/uploads/save", save_upload, methods=["POST"]),
             Route("/uploads/{sha}/delete", delete_upload, methods=["POST"]),
             Route("/audit", audit_page),
-        ]
+        ],
     )
     app.state.db_path = data / "index.sqlite3"
     app.state.uploads = data / "uploads"
