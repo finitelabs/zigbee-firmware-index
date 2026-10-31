@@ -275,12 +275,15 @@ def test_run_locally_the_local_user_needs_no_sign_in_and_the_site_is_served(tmp_
         return "a local run"
 
     app = create_app(tmp_path, {"local@localhost"}, start, "local@localhost", site)
-    client = TestClient(app, follow_redirects=False)
+    assert TestClient(app).get("/", headers={"host": "rebound.example.test"}).status_code == 403
+    client = TestClient(app, base_url="http://localhost:8080", follow_redirects=False)
     assert "local@localhost" in client.get("/").text
     assert client.get("/", headers={"x-auth-request-email": "x@example.test"}).status_code == 200
     assert client.get("/site/index.json").text == "[]\n"
     assert client.post("/publish", data={"anyway": "0"}).status_code == 403
-    done = client.post("/publish", data={"anyway": "0"}, headers={"origin": "http://testserver"})
+    done = client.post(
+        "/publish", data={"anyway": "0"}, headers={"origin": "http://localhost:8080"}
+    )
     assert "Started+a+local+run" in done.headers["location"] and started == [False]
 
 

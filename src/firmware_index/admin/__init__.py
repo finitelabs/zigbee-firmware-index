@@ -22,6 +22,7 @@ from firmware_index import db as dbm
 from firmware_index import kube, ota, rules, sources
 
 EMAIL_HEADER = "x-auth-request-email"
+LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1"}
 MAX_UPLOAD = 16 * 1024 * 1024
 LIST_LIMIT = 200
 PENDING_SECONDS = 24 * 3600
@@ -50,6 +51,10 @@ class Guard:
         if scope["type"] != "http" or scope["path"] == "/healthz":
             return await self.app(scope, receive, send)
         headers = Headers(scope=scope)
+        # Run locally there is no sign-in, so only this machine's own names may reach the page;
+        # a site rebinding its name to 127.0.0.1 would otherwise pass every check.
+        if self.local_user and urlparse(f"//{headers.get('host', '')}").hostname not in LOCAL_HOSTS:
+            return await PlainTextResponse("Not allowed", 403)(scope, receive, send)
         email = self.local_user or headers.get(EMAIL_HEADER, "").strip().lower()
         if email not in self.emails:
             return await PlainTextResponse("Not allowed", 403)(scope, receive, send)
