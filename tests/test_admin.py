@@ -86,6 +86,8 @@ def test_sources_are_listed_added_checked_and_edited(admin):
         "/sources", data={"name": "x", "type": "zigpy", "config": '{"provider": "nope"}'}
     )
     assert "zigpy" in message(bad)
+    bad = admin.post("/sources", data={"name": "x", "type": "index", "config": "[]"})
+    assert "Config+must+be+a+JSON+object" in message(bad)
     good = {"name": "vendor", "type": "index", "config": '{"url": "https://v.test/i.json"}'}
     assert "Added+vendor" in message(admin.post("/sources", data={**good, "priority": "7"}))
     admin.post(
@@ -152,6 +154,15 @@ def test_rules_are_added_checked_switched_deleted_and_downloaded(admin):
     assert "not+JSON" in message(bad)
     bad = admin.post("/rules", data={"id": "r1", "action": "hold", "match": '{"colour": 1}'})
     assert "unknown+match+key" in message(bad)
+    blank = admin.post("/rules", data={"id": "r1", "action": "set", "set": '{"modelId": "M"}'})
+    assert "needs+a+Match" in message(blank)
+    listed = admin.post("/rules", data={"id": "r1", "action": "hold", "match": "[]"})
+    assert "Match+must+be+a+JSON+object" in message(listed)
+    listed = admin.post(
+        "/rules", data={"id": "r1", "action": "set", "match": '{"imageType": 1}', "set": "[]"}
+    )
+    assert "Set+must+be+a+JSON+object" in message(listed)
+    assert admin.db.execute("SELECT COUNT(*) FROM rules").fetchone()[0] == 0
     good = {"id": "r1", "action": "set", "match": '{"imageType": 1}', "set": '{"modelId": "M"}'}
     assert "Added+rule+r1" in message(admin.post("/rules", data=good))
     assert "exists" in message(admin.post("/rules", data=good))

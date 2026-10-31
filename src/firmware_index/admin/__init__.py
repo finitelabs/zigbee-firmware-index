@@ -85,11 +85,14 @@ def optional_int(value: str | None) -> int | None:
     return int(value, 0) if value else None
 
 
-def parse_json(value: str, what: str):
+def parse_json(value: str, what: str) -> dict:
     try:
-        return json.loads(value or "{}")
+        parsed = json.loads(value or "{}")
     except json.JSONDecodeError as e:
         raise Refused(f"{what} is not JSON: {e.msg}") from None
+    if not isinstance(parsed, dict):
+        raise Refused(f"{what} must be a JSON object")
+    return parsed
 
 
 async def healthz(request: Request) -> Response:
@@ -326,10 +329,13 @@ async def add_rule(request: Request) -> Response:
             raise Refused("An id is letters, digits, dots, dashes and underscores")
         if db.execute("SELECT 1 FROM rules WHERE id = ?", (rid,)).fetchone():
             raise Refused(f"A rule {rid} exists")
+        match = parse_json(form.get("match", ""), "Match")
+        if not match:
+            raise Refused('A rule needs a Match; for every file, say {"url": "*"}')
         rule = rules.Rule(
             id=rid,
             action=form.get("action"),
-            match=parse_json(form.get("match", ""), "Match"),
+            match=match,
             set=parse_json(form.get("set", ""), "Set"),
             note=(form.get("note") or "").strip(),
         )
