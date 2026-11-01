@@ -38,6 +38,10 @@ fmt:
 check:
 	black --check .
 
+.PHONY: check-python
+check-python:
+	tools/check-python
+
 .PHONY: test
 test:
 	pytest
@@ -57,3 +61,7 @@ manufacturers:
 .PHONY: image
 image:
 	docker build -t $(IMAGE):dev .
+
+.PHONY: image-test
+image-test:
+	tools/image-test $(IMAGE):dev

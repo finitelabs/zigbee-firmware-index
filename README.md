@@ -114,7 +114,7 @@ sources; the first takes about a minute to download every file.
 Work in a virtualenv:
 
 ```bash
-python3.13 -m venv .venv
+python3.15 -m venv .venv
 . .venv/bin/activate
 make init install
 make check test
@@ -124,7 +124,11 @@ make check test
 - Dependencies are `requirements.in` and `requirements-dev.in`. `make install`
   recompiles a changed one with pip-compile; `make install UPGRADE=1` upgrades
   them all.
-- `make image` builds the image locally.
+- `make image` builds the image locally, and `make image-test` starts it and
+  fails if the app can't start.
+- `make check-python` fails when the Dockerfile's Python and `.python-version`
+  differ. A Python bump changes both and recompiles the requirements under the
+  new Python.
 - `make manufacturers` regenerates `src/firmware_index/manufacturers.py`, the
   CSA's manufacturer code list the admin page names makers from, from ZAP's
   copy at the commit the Makefile names.

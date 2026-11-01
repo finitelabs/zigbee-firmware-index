@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# Fail when the built image can't start the app. Serve itself isn't run: on a new
+# database its first run fetches from the vendor feeds.
+#
+# Usage: tools/image-test IMAGE
+
+set -euo pipefail
+
+IMAGE=${1:?usage: tools/image-test IMAGE}
+
+# Through the entrypoint, with the native crypto, writing to /data as the image's user.
+key=$(docker run --rm "$IMAGE" keygen /data/image-test.pem)
+if [[ ! $key =~ ^[0-9a-f]{64}$ ]]; then
+  echo "keygen printed '$key', not a public key" >&2
+  exit 1
+fi
+
+docker run --rm --entrypoint python "$IMAGE" -c "import uvicorn, firmware_index.admin"
+echo "$IMAGE starts"
