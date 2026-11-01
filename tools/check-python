@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# Fail when the Dockerfile's Python differs from .python-version, the Python CI
+# tests on and the requirements are compiled with.
+#
+# Usage: tools/check-python
+
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+want=$(cut -d. -f1,2 .python-version)
+image=$(sed -n 's/^FROM python:\([0-9]*\.[0-9]*\).*/\1/p' Dockerfile)
+
+if [ "$image" != "$want" ]; then
+  echo "The Dockerfile builds on Python ${image:-?}, but .python-version is $want." >&2
+  echo "Set .python-version to match and recompile the requirements under it." >&2
+  exit 1
+fi
+echo "Python $want in the Dockerfile and .python-version"
