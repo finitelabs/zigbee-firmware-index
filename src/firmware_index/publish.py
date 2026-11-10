@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Protocol
 from urllib.parse import urlparse
 
+import aiohttp
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from firmware_index import db as dbm
@@ -24,6 +25,11 @@ OK, BRAKE, FAILED = "ok", "brake", "failed"
 LOCKED = "another run holds the lock"
 BRAKE_SHARE = 0.05
 DOWNLOADS = 4
+# Ledvance allows about 20 downloads a minute, and still refused 40 s after asking for 13.
+RATE_LIMITED = 429
+FIRST_WAIT = 15.0
+LONGEST_WAIT = 120.0
+PATIENCE = 1800.0
 
 
 class Fetcher(Protocol):
@@ -43,6 +49,76 @@ class HttpFetcher:
 
 class CheckError(Exception):
     pass
+
+
+def asked_wait(e: Exception) -> float | None:
+    """The seconds a download refused for its rate asks to wait (0 where it names none), or None."""
+    if not isinstance(e, aiohttp.ClientResponseError) or e.status != RATE_LIMITED:
+        return None
+    try:
+        return max(0.0, float((e.headers or {}).get("Retry-After", 0)))
+    except ValueError:
+        return 0.0
+
+
+async def hold_off(seconds: float) -> None:
+    await asyncio.sleep(seconds)
+
+
+class Pace:
+    """A source's downloads in one run; one at a time once it refuses one for its rate."""
+
+    def __init__(self, source: str, slots: asyncio.Semaphore):
+        self.source = source
+        # The run's slots: a caller holds one, given back only while its source makes it wait.
+        self.slots = slots
+        self.one_at_a_time = asyncio.Lock()
+        self.slowed = False
+        self.waited = 0.0
+        self.refused: str | None = None
+
+    async def download(self, c: Candidate, fetcher: Fetcher) -> bytes:
+        asked = None
+        if not self.slowed:
+            try:
+                return await download(c, fetcher)
+            except Exception as e:
+                asked = asked_wait(e)
+                if asked is None:
+                    raise
+                self.slowed = True
+        self.slots.release()
+        held = False
+        try:
+            async with self.one_at_a_time:
+                backoff = FIRST_WAIT
+                while True:
+                    if self.refused:
+                        raise CheckError(self.refused)
+                    if asked is not None:
+                        pause = min(max(asked, backoff), LONGEST_WAIT)
+                        if self.waited + pause > PATIENCE:
+                            self.refused = (
+                                f"{self.source} kept refusing downloads for their rate"
+                                " (HTTP 429); the next run tries again"
+                            )
+                            raise CheckError(self.refused)
+                        await hold_off(pause)
+                        self.waited += pause
+                        backoff = min(backoff * 2, LONGEST_WAIT)
+                    await self.slots.acquire()
+                    held = True
+                    try:
+                        return await download(c, fetcher)
+                    except Exception as e:
+                        asked = asked_wait(e)
+                        if asked is None:
+                            raise
+                    self.slots.release()
+                    held = False
+        finally:
+            if not held:
+                await self.slots.acquire()
 
 
 @dataclass
@@ -171,7 +247,7 @@ def trim(c: Candidate, data: bytes) -> tuple[bytes, ota.Image]:
 
 
 async def check(
-    db: sqlite3.Connection, c: Candidate, fetcher: Fetcher, at: str
+    db: sqlite3.Connection, c: Candidate, fetcher: Fetcher, at: str, pace: Pace
 ) -> tuple[Checked, bytes | None]:
     row = db.execute("SELECT * FROM files WHERE download_key = ?", (c.download_key(),)).fetchone()
     if row:
@@ -186,7 +262,7 @@ async def check(
             ),
             None,
         )
-    data = await download(c, fetcher)
+    data = await pace.download(c, fetcher)
     body, img = trim(c, data)
     sha = hashlib.sha512(body).hexdigest()
     upstream = hashlib.sha512(data).hexdigest() if body != data else None
@@ -207,12 +283,12 @@ async def check(
 
 
 async def store_file(
-    db: sqlite3.Connection, s: Settings, c: Candidate, chk: Checked, body, fetcher
+    db: sqlite3.Connection, s: Settings, c: Candidate, chk: Checked, body, fetcher, pace: Pace
 ) -> None:
     if chk.stored:
         return
     if body is None:
-        body, _ = trim(c, await download(c, fetcher))
+        body, _ = trim(c, await pace.download(c, fetcher))
         if hashlib.sha512(body).hexdigest() != chk.sha512:
             raise CheckError("it changed since it was checked")
     if not await asyncio.to_thread(s.store.exists, chk.path):
@@ -302,11 +378,13 @@ async def build(db, s: Settings, fetcher: Fetcher, uploads: Path, at, report: Re
     gate = asyncio.Semaphore(DOWNLOADS)
     # One file can stand behind several candidates (a model each); fetch it once.
     per_file = defaultdict(asyncio.Lock)
+    paces = {}
 
     async def one(c: Candidate, first: str):
-        async with gate, per_file[c.download_key()]:
+        async with per_file[c.download_key()], gate:
             try:
-                chk, body = await check(db, c, fetcher, stamp)
+                pace = paces.setdefault(c.source, Pace(c.source, gate))
+                chk, body = await check(db, c, fetcher, stamp, pace)
                 outcome = rules.apply(active, c, chk.sha512, chk.upstream_sha512)
                 if outcome.action == rules.DROP:
                     report.dropped.append(c.describe())
@@ -314,7 +392,7 @@ async def build(db, s: Settings, fetcher: Fetcher, uploads: Path, at, report: Re
                 if outcome.action == rules.HOLD:
                     report.held.append(c.describe())
                     return None
-                await store_file(db, s, c, chk, body, fetcher)
+                await store_file(db, s, c, chk, body, fetcher, pace)
             except Exception as e:
                 reason = str(e) if isinstance(e, CheckError) else f"{type(e).__name__}: {e}"
                 report.failures.append({"entry": c.describe(), "reason": reason})

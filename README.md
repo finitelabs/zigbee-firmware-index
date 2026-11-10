@@ -75,7 +75,10 @@ needs no sign-in.
 3. Downloads each file not checked before and checks it against the source's
    checksum. Its OTA header must name the entry's manufacturer code, image type
    and file version. The published copy runs from the header through its total
-   image size, without a vendor wrapper or trailing bytes.
+   image size, without a vendor wrapper or trailing bytes. A source that refuses
+   downloads for their rate (HTTP 429) is then fetched one file at a time, each
+   refusal waited out, for up to 30 minutes a run; what is left waits for the
+   next run.
 4. Applies the rules: drop, hold, or set fields.
 5. Merges: one entry per file and gate; when two sources list different files
    for one gate, the higher-priority source wins.
