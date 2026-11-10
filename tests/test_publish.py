@@ -494,5 +494,34 @@ def test_a_slowed_source_leaves_the_other_sources_their_downloads(world, monkeyp
     assert len(world.index()) == 15
     calls = [u for u in world.fetcher.calls if u.endswith(".ota")]
     others = [i for i, u in enumerate(calls) if "b.test" in u]
-    # The first refusal slows the source; the other source's files go next, not last.
     assert others == [1, 2, 3]
+
+
+def test_a_run_holds_no_more_new_files_than_its_slots(world, monkeypatch):
+    world.source("community", 3, A)
+    world.fetcher.serve(A, files(world, 30))
+    serve = world.fetcher.get
+    held = {"now": 0, "most": 0}
+
+    async def get(url):
+        await asyncio.sleep(0.001)
+        body = await serve(url)
+        if url.endswith(".ota"):
+            held["now"] += 1
+            held["most"] = max(held["most"], held["now"])
+        return body
+
+    world.fetcher.get = get
+    put = world.store.put
+
+    def counted(key, *args, **kwargs):
+        if key.startswith("images/"):
+            held["now"] -= 1
+        return put(key, *args, **kwargs)
+
+    monkeypatch.setattr(world.store, "put", counted)
+
+    world.run()
+
+    assert len(world.index()) == 30
+    assert held["most"] <= publish.DOWNLOADS

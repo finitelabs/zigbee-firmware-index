@@ -70,8 +70,7 @@ class Pace:
 
     def __init__(self, source: str, slots: asyncio.Semaphore):
         self.source = source
-        # The run's download slots, held only while a download runs, never while a refusal is
-        # waited out, so a slowed source leaves the others theirs.
+        # The run's slots: a caller holds one, given back only while its source makes it wait.
         self.slots = slots
         self.one_at_a_time = asyncio.Lock()
         self.slowed = False
@@ -81,38 +80,45 @@ class Pace:
     async def download(self, c: Candidate, fetcher: Fetcher) -> bytes:
         asked = None
         if not self.slowed:
-            async with self.slots:
-                if not self.slowed:
+            try:
+                return await download(c, fetcher)
+            except Exception as e:
+                asked = asked_wait(e)
+                if asked is None:
+                    raise
+                self.slowed = True
+        self.slots.release()
+        held = False
+        try:
+            async with self.one_at_a_time:
+                backoff = FIRST_WAIT
+                while True:
+                    if self.refused:
+                        raise CheckError(self.refused)
+                    if asked is not None:
+                        pause = min(max(asked, backoff), LONGEST_WAIT)
+                        if self.waited + pause > PATIENCE:
+                            self.refused = (
+                                f"{self.source} kept refusing downloads for their rate"
+                                " (HTTP 429); the next run tries again"
+                            )
+                            raise CheckError(self.refused)
+                        await hold_off(pause)
+                        self.waited += pause
+                        backoff = min(backoff * 2, LONGEST_WAIT)
+                    await self.slots.acquire()
+                    held = True
                     try:
                         return await download(c, fetcher)
                     except Exception as e:
                         asked = asked_wait(e)
                         if asked is None:
                             raise
-                        self.slowed = True
-        async with self.one_at_a_time:
-            backoff = FIRST_WAIT
-            while True:
-                if self.refused:
-                    raise CheckError(self.refused)
-                if asked is not None:
-                    pause = min(max(asked, backoff), LONGEST_WAIT)
-                    if self.waited + pause > PATIENCE:
-                        self.refused = (
-                            f"{self.source} kept refusing downloads for their rate (HTTP 429);"
-                            " the next run tries again"
-                        )
-                        raise CheckError(self.refused)
-                    await hold_off(pause)
-                    self.waited += pause
-                    backoff = min(backoff * 2, LONGEST_WAIT)
-                try:
-                    async with self.slots:
-                        return await download(c, fetcher)
-                except Exception as e:
-                    asked = asked_wait(e)
-                    if asked is None:
-                        raise
+                    self.slots.release()
+                    held = False
+        finally:
+            if not held:
+                await self.slots.acquire()
 
 
 @dataclass
@@ -285,11 +291,8 @@ async def store_file(
         body, _ = trim(c, await pace.download(c, fetcher))
         if hashlib.sha512(body).hexdigest() != chk.sha512:
             raise CheckError("it changed since it was checked")
-    async with pace.slots:
-        if not await asyncio.to_thread(s.store.exists, chk.path):
-            await asyncio.to_thread(
-                s.store.put, chk.path, body, "application/octet-stream", IMMUTABLE
-            )
+    if not await asyncio.to_thread(s.store.exists, chk.path):
+        await asyncio.to_thread(s.store.put, chk.path, body, "application/octet-stream", IMMUTABLE)
     db.execute("UPDATE files SET stored = 1 WHERE download_key = ?", (c.download_key(),))
     chk.stored = True
 
@@ -378,7 +381,7 @@ async def build(db, s: Settings, fetcher: Fetcher, uploads: Path, at, report: Re
     paces = {}
 
     async def one(c: Candidate, first: str):
-        async with per_file[c.download_key()]:
+        async with gate, per_file[c.download_key()]:
             try:
                 pace = paces.setdefault(c.source, Pace(c.source, gate))
                 chk, body = await check(db, c, fetcher, stamp, pace)
