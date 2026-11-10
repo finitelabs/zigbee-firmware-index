@@ -475,3 +475,24 @@ def test_a_source_refusing_past_its_patience_leaves_its_files_for_the_next_run(
     assert {f["reason"] for f in report.failures} == {
         "community kept refusing downloads for their rate (HTTP 429); the next run tries again"
     }
+
+
+def test_a_slowed_source_leaves_the_other_sources_their_downloads(world, monkeypatch):
+    async def hold_off(seconds):
+        await asyncio.sleep(0.01)
+
+    monkeypatch.setattr(publish, "hold_off", hold_off)
+    world.source("ledvance", 3, A)
+    world.source("other", 4, B)
+    world.fetcher.serve(A, files(world, 12))
+    world.fetcher.serve(B, files(world, 3, host="b.test", start=20))
+    throttle(world, {f"https://a.test/images/fw{i}.ota": 1 for i in range(12)})
+
+    report = world.run()
+
+    assert report.failures == []
+    assert len(world.index()) == 15
+    calls = [u for u in world.fetcher.calls if u.endswith(".ota")]
+    others = [i for i, u in enumerate(calls) if "b.test" in u]
+    # The first refusal slows the source; the other source's files go next, not last.
+    assert others == [1, 2, 3]
