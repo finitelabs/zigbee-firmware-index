@@ -525,3 +525,26 @@ def test_a_run_holds_no_more_new_files_than_its_slots(world, monkeypatch):
 
     assert len(world.index()) == 30
     assert held["most"] <= publish.DOWNLOADS
+
+
+def test_a_slowed_file_listed_under_two_models_does_not_stall_the_run(world, monkeypatch):
+    async def hold_off(seconds):
+        await asyncio.sleep(0.001)
+
+    monkeypatch.setattr(publish, "hold_off", hold_off)
+    world.source("ledvance", 3, A)
+    entries = []
+    for e in files(world, 12):
+        entries += [{**e, "modelId": "M1"}, {**e, "modelId": "M2"}]
+    world.fetcher.serve(A, entries)
+    throttle(world, {f"https://a.test/images/fw{i}.ota": 1 for i in range(12)})
+    settings = publish.Settings(
+        public_url="https://ota.example.test", key=world.key, store=world.store, anyway=False
+    )
+
+    report = asyncio.run(
+        asyncio.wait_for(publish.run(world.db, settings, world.fetcher, world.uploads), 10)
+    )
+
+    assert report.failures == []
+    assert len(world.index()) == 24

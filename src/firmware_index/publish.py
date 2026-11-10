@@ -381,7 +381,7 @@ async def build(db, s: Settings, fetcher: Fetcher, uploads: Path, at, report: Re
     paces = {}
 
     async def one(c: Candidate, first: str):
-        async with gate, per_file[c.download_key()]:
+        async with per_file[c.download_key()], gate:
             try:
                 pace = paces.setdefault(c.source, Pace(c.source, gate))
                 chk, body = await check(db, c, fetcher, stamp, pace)
