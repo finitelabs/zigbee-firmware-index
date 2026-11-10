@@ -2,7 +2,11 @@ import asyncio
 import hashlib
 import json
 
+import aiohttp
+import pytest
 from conftest import index_entry, ota_file
+from multidict import CIMultiDict, CIMultiDictProxy
+from yarl import URL
 from zigpy.ota.providers import LocalOtaImageMetadata
 
 from firmware_index import db as dbm
@@ -21,6 +25,36 @@ def files(world, n, host="a.test", start=0):
         world.fetcher.serve(url, data)
         out.append(index_entry(url, data, 0x1000 + i, 1, 0x10))
     return out
+
+
+def throttle(world, refusals, after="7"):
+    """world's fetcher refuses each URL in refusals for its rate (HTTP 429) that many times first."""
+    left = dict(refusals)
+    serve = world.fetcher.get
+
+    async def get(url):
+        if left.get(url):
+            left[url] -= 1
+            world.fetcher.calls.append(url)
+            headers = CIMultiDictProxy(CIMultiDict({"Retry-After": after} if after else {}))
+            info = aiohttp.RequestInfo(URL(url), "GET", headers, URL(url))
+            raise aiohttp.ClientResponseError(
+                info, (), status=429, message="Too Many Requests", headers=headers
+            )
+        return await serve(url)
+
+    world.fetcher.get = get
+
+
+@pytest.fixture
+def pauses(monkeypatch):
+    held = []
+
+    async def hold_off(seconds):
+        held.append(seconds)
+
+    monkeypatch.setattr(publish, "hold_off", hold_off)
+    return held
 
 
 def test_a_run_publishes_our_copies_a_signed_snapshot_and_the_page(world):
@@ -399,3 +433,45 @@ def test_a_run_with_no_kept_index_or_a_held_lock_cannot_be_republished(world):
     assert dbm.take_lock(world.db, "other", dbm.now())
     report = asyncio.run(publish.republish(world.db, settings, 1))
     assert report.alerts == ["another run holds the lock"]
+
+
+def test_a_source_that_refuses_downloads_for_their_rate_is_waited_out(world, pauses):
+    world.source("community", 3, A)
+    world.fetcher.serve(A, files(world, 3))
+    throttle(world, {"https://a.test/images/fw0.ota": 2})
+
+    report = world.run()
+
+    assert report.failures == []
+    assert len(world.index()) == 3
+    assert pauses == [publish.FIRST_WAIT, publish.FIRST_WAIT * 2]
+
+
+def test_a_wait_the_source_asks_for_is_kept_when_longer(world, pauses):
+    world.source("community", 3, A)
+    world.fetcher.serve(A, files(world, 1))
+    throttle(world, {"https://a.test/images/fw0.ota": 1}, after="90")
+
+    world.run()
+
+    assert pauses == [90.0]
+
+
+def test_a_source_refusing_past_its_patience_leaves_its_files_for_the_next_run(
+    world, pauses, monkeypatch
+):
+    monkeypatch.setattr(publish, "PATIENCE", 100.0)
+    world.source("community", 3, A)
+    world.source("other", 4, B)
+    world.fetcher.serve(A, files(world, 3))
+    world.fetcher.serve(B, files(world, 1, host="b.test", start=5))
+    throttle(world, {f"https://a.test/images/fw{i}.ota": 50 for i in range(3)})
+
+    report = world.run()
+
+    assert [e["manufacturerCode"] for e in world.index()] == [0x1005]
+    assert pauses == [publish.FIRST_WAIT, publish.FIRST_WAIT * 2]
+    assert sorted(f["entry"].split(":")[0] for f in report.failures) == ["community"] * 3
+    assert {f["reason"] for f in report.failures} == {
+        "community kept refusing downloads for their rate (HTTP 429); the next run tries again"
+    }
