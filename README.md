@@ -140,7 +140,8 @@ make check test
 
 ## Releases
 
-A tag `vMAJOR.MINOR.PATCH` builds the image and pushes it to
+A tag `vMAJOR.MINOR.PATCH` waits for a reviewer to approve its `release`
+deployment, then builds the image and pushes it to
 `ghcr.io/finitelabs/zigbee-firmware-index` as the version, `MAJOR.MINOR` and
 `MAJOR`, then publishes a GitHub release.
 
