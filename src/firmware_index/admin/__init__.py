@@ -564,7 +564,7 @@ def set_fields(form) -> dict:
             continue
         if name == "manufacturerName":
             fields[name] = [v.strip() for v in value.split(",") if v.strip()]
-        elif name in ("releaseNotes", "modelId", "otaHeaderString"):
+        elif name in ("releaseNotes", "modelId", "otaHeaderString", "versionScheme"):
             fields[name] = value
         else:
             fields[name] = optional_int(value)

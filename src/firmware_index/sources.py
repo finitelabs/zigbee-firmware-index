@@ -74,6 +74,7 @@ class Candidate:
     hardware_max: int | None = None
     release_notes: str | None = None
     original_url: str | None = None
+    version_scheme: str | None = None
     # zigpy's metadata, which downloads with its provider's certificates and checks.
     meta: Any = field(default=None, repr=False, compare=False)
 

@@ -62,7 +62,10 @@ needs no sign-in.
 - **Sources**: priority, delay, on or off, and each source's config.
 - **Images**: search the published index; hold, drop or correct one file, each
   by adding a rule.
-- **Rules**: add, switch on or off, delete, and download as YAML.
+- **Rules**: add, switch on or off, delete, and download as YAML. A set rule's
+  version scheme `aqara` is for a model whose headers hold two numbers while the
+  device reports the second alone: its entries carry that number as
+  `reportedVersion`.
 - **Uploads**: a file or URL is checked and cut to its OTA image, then saved
   with any fields given; it goes out on the next run.
 - **Audit**: who changed what, and when.

@@ -64,3 +64,9 @@ def test_a_rule_names_only_known_actions_and_fields():
         rules.Rule(id="r", action=rules.SET, match={}, set={"url": "x"})
     with pytest.raises(ValueError, match="unknown match key colour"):
         rules.Rule(id="r", action=rules.HOLD, match={"colour": 1})
+
+
+def test_a_version_scheme_is_one_the_index_knows():
+    assert rules.Rule(id="r", action=rules.SET, match={}, set={"versionScheme": "aqara"})
+    with pytest.raises(ValueError, match="unknown version scheme 'tuya'"):
+        rules.Rule(id="r", action=rules.SET, match={}, set={"versionScheme": "tuya"})

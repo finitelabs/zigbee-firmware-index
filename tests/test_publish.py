@@ -260,6 +260,39 @@ def test_rules_hold_drop_and_correct_entries(world):
     assert not (world.site / "images" / listed[0]["sha512"][:16]).exists()
 
 
+def test_an_aqara_model_s_entries_name_the_version_its_devices_report(world):
+    world.source("community", 3, A)
+    # Aqara's FP400 file 6263 (0063): the header names 62 and 63, the sensor reports 63.
+    fp400 = ota_file(0x115F, 0xDEA0, 0x3E3F)
+    other = ota_file(0x115F, 0x0417, 0x14)
+    fp400_url, other_url = "https://a.test/images/fp400.ota", "https://a.test/images/other.ota"
+    world.fetcher.serve(fp400_url, fp400)
+    world.fetcher.serve(other_url, other)
+    world.fetcher.serve(
+        A,
+        [
+            index_entry(fp400_url, fp400, 0x115F, 0xDEA0, 0x3E3F, modelId="lumi.models.4447_8295"),
+            index_entry(other_url, other, 0x115F, 0x0417, 0x14, modelId="lumi.models.4447_6209"),
+        ],
+    )
+    world.db.execute(
+        "INSERT INTO rules (id, action, match, set_fields, created) VALUES (?, ?, ?, ?, '2026')",
+        (
+            "fp400",
+            "set",
+            json.dumps({"modelId": "lumi.models.4447_8295"}),
+            '{"versionScheme": "aqara"}',
+        ),
+    )
+
+    world.run()
+
+    by_model = {e["modelId"]: e for e in world.index()}
+    fp = by_model["lumi.models.4447_8295"]
+    assert (fp["fileVersion"], fp["reportedVersion"], fp["rules"]) == (0x3E3F, 63, ["fp400"])
+    assert "reportedVersion" not in by_model["lumi.models.4447_6209"]
+
+
 def test_zigpy_sources_download_through_zigpy(world, tmp_path, monkeypatch):
     path = tmp_path / "z.ota"
     data = ota_file(0x1234, 1, 0x20)

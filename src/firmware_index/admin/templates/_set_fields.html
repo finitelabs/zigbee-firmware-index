@@ -7,6 +7,7 @@
   <div class="field"><label>Lowest hardware {{ m.help("Offer this file only to devices whose hardware version is at least this.") }}</label><input type="text" name="s_hardwareVersionMin"></div>
   <div class="field"><label>Highest hardware</label><input type="text" name="s_hardwareVersionMax"></div>
   <div class="field wide"><label>Header string</label><input type="text" name="s_otaHeaderString"></div>
+  <div class="field"><label>Version scheme {{ m.help("aqara: the header holds two numbers and the device reports the second alone.") }}</label><select name="s_versionScheme"><option value="">From the header</option><option value="aqara">aqara</option></select></div>
   <div class="field full"><label>Release notes</label><textarea name="s_releaseNotes"></textarea></div>
 </div>
 <p class="hint">Only the fields you fill in change. From and up to version bound the firmware a device must run to take this file. Numbers may be decimal or hex (0x...).</p>

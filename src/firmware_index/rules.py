@@ -21,7 +21,12 @@ SETTABLE = {
     "hardwareVersionMax": "hardware_max",
     "releaseNotes": "release_notes",
     "otaHeaderString": "header_string",
+    "versionScheme": "version_scheme",
 }
+
+# How a model numbers its firmware when that differs from its files' headers. "aqara": the header holds two
+# numbers (Aqara's file 6263 is 0x3E3F) and the device reports the second alone (63).
+SCHEMES = {"aqara"}
 
 
 @dataclass
@@ -39,6 +44,9 @@ class Rule:
         unknown = set(self.set) - set(SETTABLE)
         if unknown:
             raise ValueError(f"rule {self.id}: cannot set {', '.join(sorted(unknown))}")
+        scheme = self.set.get("versionScheme")
+        if scheme is not None and scheme not in SCHEMES:
+            raise ValueError(f"rule {self.id}: unknown version scheme {scheme!r}")
         unknown = set(self.match) - MATCH_KEYS
         if unknown:
             raise ValueError(f"rule {self.id}: unknown match key {', '.join(sorted(unknown))}")

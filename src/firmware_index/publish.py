@@ -305,6 +305,13 @@ def with_fields(c: Candidate, fields: dict) -> tuple[Candidate, str | None]:
     return dataclasses.replace(c, **changes), header
 
 
+def reported(c: Candidate) -> int | None:
+    """The file version a device reports once it runs this file, where its scheme makes it differ from the header's."""
+    if c.version_scheme == "aqara":
+        return c.version & 0xFF
+    return None
+
+
 def entry(c: Candidate, chk: Checked, header: str | None, srcs, applied, seen, base) -> dict:
     e = {
         "fileName": c.file_name,
@@ -324,6 +331,7 @@ def entry(c: Candidate, chk: Checked, header: str | None, srcs, applied, seen, b
         "hardwareVersionMax": c.hardware_max,
         "minFileVersion": c.min_file_version,
         "maxFileVersion": c.max_file_version,
+        "reportedVersion": reported(c),
         "originalUrl": c.original_url,
         "sources": srcs,
         "upstreamSha512": chk.upstream_sha512,
